@@ -1184,6 +1184,11 @@ def run_analysis(checkpoint: bool = False, auto_save_report: bool = True):
             report_file = save_report_to_disk(final_state, selections["ticker"], default_path)
             console.print(f"[green]✓ Report saved to:[/green] {default_path.resolve()}")
             console.print(f"  [dim]Complete report:[/dim] {report_file.name}")
+            trade_date = selections.get("analysis_date", "")
+            pdf_bytes = generate_pdf(final_state, selections["ticker"], trade_date, decision)
+            pdf_path = default_path / f"{selections['ticker']}_{trade_date}.pdf"
+            pdf_path.write_bytes(pdf_bytes)
+            console.print(f"  [dim]PDF report:[/dim] {pdf_path.name}")
         except Exception as e:
             console.print(f"[red]Error saving report: {e}[/red]")
         display_complete_report(final_state)
@@ -1201,6 +1206,11 @@ def run_analysis(checkpoint: bool = False, auto_save_report: bool = True):
                 report_file = save_report_to_disk(final_state, selections["ticker"], save_path)
                 console.print(f"\n[green]✓ Report saved to:[/green] {save_path.resolve()}")
                 console.print(f"  [dim]Complete report:[/dim] {report_file.name}")
+                trade_date = selections.get("analysis_date", "")
+                pdf_bytes = generate_pdf(final_state, selections["ticker"], trade_date, decision)
+                pdf_path = save_path / f"{selections['ticker']}_{trade_date}.pdf"
+                pdf_path.write_bytes(pdf_bytes)
+                console.print(f"  [dim]PDF report:[/dim] {pdf_path.name}")
             except Exception as e:
                 console.print(f"[red]Error saving report: {e}[/red]")
 

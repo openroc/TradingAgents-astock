@@ -27,7 +27,9 @@ def _find_cjk_font() -> str | None:
 
 
 def _strip_think(text: str) -> str:
-    return re.sub(r"<think>.*?</think>\s*", "", text, flags=re.DOTALL).strip()
+    text = re.sub(r"<think>.*?</think>\s*", "", text, flags=re.DOTALL).strip()
+    text = re.sub(r"^>.*$", "", text, flags=re.MULTILINE)
+    return text
 
 
 def _strip_md_inline(text: str) -> str:
@@ -37,6 +39,21 @@ def _strip_md_inline(text: str) -> str:
     text = re.sub(r"`(.+?)`", r"\1", text)
     text = re.sub(r"\[(.+?)\]\(.+?\)", r"\1", text)
     return text
+
+
+_NON_CJK_RE = re.compile(
+    r"[\U00002000-\U00002FFF]"  # emoji & symbols block
+    r"|[\U0001F300-\U0001F9FF]"  # emoji block
+    r"|[\U0001FA00-\U0001FFFF]"  # more emoji
+    r"|[\U00002702-\U000027B0]"  # dingbats
+    r"|[\U00002460-\U000024FF]"  # enclosed numbers/letters
+    r"|[\U00002600-\U000026FF]"  # misc symbols
+    r"|\uFE0E|\uFE0F"  # variation selectors (emoji/text presentation toggles)
+)
+
+
+def _safe_pdf_text(text: str) -> str:
+    return _NON_CJK_RE.sub("", text)
 
 
 def _signal_color(signal: str) -> tuple[int, int, int]:
@@ -69,8 +86,8 @@ class _ReportPDF(FPDF):
 
         font_path = _find_cjk_font()
         if font_path:
-            self.add_font("CJK", "", font_path, uni=True)
-            self.add_font("CJK", "B", font_path, uni=True)
+            self.add_font("CJK", "", font_path)
+            self.add_font("CJK", "B", font_path)
             self._has_cjk = True
 
     def _use_font(self, style: str = "", size: int = 10) -> None:
@@ -137,10 +154,12 @@ class _ReportPDF(FPDF):
 
     def add_section(self, title: str, content: str) -> None:
         self.add_page()
+        self._use_font("", 10)
         self._use_font("B", 16)
         self.set_text_color(255, 90, 31)
         self.cell(0, 10, title)
-        self.ln(12)
+        self.ln(15)
+        self._use_font("", 10)
 
         cleaned = _strip_think(content)
         self._render_markdown(cleaned)
@@ -152,6 +171,7 @@ class _ReportPDF(FPDF):
         while i < len(lines):
             line = lines[i]
             stripped = line.strip()
+            self.x = self.l_margin  # reset x so multi_cell(0,...) gets full width
 
             # Empty line → small vertical gap
             if not stripped:
@@ -163,21 +183,21 @@ class _ReportPDF(FPDF):
             if stripped.startswith("###"):
                 self._use_font("B", 11)
                 self.set_text_color(50, 50, 50)
-                self.cell(0, 7, stripped.lstrip("#").strip())
+                self.cell(0, 7, _safe_pdf_text(stripped.lstrip("#").strip()))
                 self.ln(8)
                 i += 1
                 continue
             if stripped.startswith("##"):
                 self._use_font("B", 13)
                 self.set_text_color(40, 40, 40)
-                self.cell(0, 8, stripped.lstrip("#").strip())
+                self.cell(0, 8, _safe_pdf_text(stripped.lstrip("#").strip()))
                 self.ln(9)
                 i += 1
                 continue
             if stripped.startswith("#"):
                 self._use_font("B", 14)
                 self.set_text_color(255, 90, 31)
-                self.cell(0, 9, stripped.lstrip("#").strip())
+                self.cell(0, 9, _safe_pdf_text(stripped.lstrip("#").strip()))
                 self.ln(10)
                 i += 1
                 continue
@@ -196,14 +216,14 @@ class _ReportPDF(FPDF):
                 self._use_font("", 10)
                 self.set_text_color(40, 40, 40)
                 if re.match(r"^[-*]\s", stripped):
-                    bullet = "  •  "
+                    bullet = "  *  "
                     body = stripped[2:].strip()
                 else:
                     m = re.match(r"^(\d+[.)])\s*(.*)", stripped)
                     bullet = f"  {m.group(1)} "
                     body = m.group(2)
                 body = _strip_md_inline(body)
-                self.multi_cell(0, 5.5, bullet + body)
+                self.multi_cell(0, 5.5, _safe_pdf_text(bullet + body))
                 i += 1
                 continue
 
@@ -216,7 +236,7 @@ class _ReportPDF(FPDF):
                 self._use_font("", 9)
                 self.set_text_color(60, 60, 60)
                 cells = [c.strip() for c in stripped.strip("|").split("|")]
-                row_text = "    ".join(_strip_md_inline(c) for c in cells)
+                row_text = "    ".join(_strip_md_inline(_safe_pdf_text(c)) for c in cells)
                 self.multi_cell(0, 5, row_text)
                 i += 1
                 continue
@@ -235,7 +255,7 @@ class _ReportPDF(FPDF):
                 self.set_text_color(40, 40, 40)
                 para = " ".join(para_lines)
                 para = _strip_md_inline(para)
-                self.multi_cell(0, 5.5, para)
+                self.multi_cell(0, 5.5, _safe_pdf_text(para))
                 self.ln(2)
                 continue
 
