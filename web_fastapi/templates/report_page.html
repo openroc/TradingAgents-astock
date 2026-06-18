@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block title %}{{ ticker }} 分析报告 — TradingAgents-Astock{% endblock %}
+
+{% block content %}
+{# ── Header ── #}
+<div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+  <div>
+    <h1 class="text-3xl font-bold">
+      <span class="text-emerald-400">{{ ticker }}</span>
+      <span class="text-gray-500 text-xl ml-2">{{ trade_date }}</span>
+    </h1>
+    <p class="text-gray-400 text-sm mt-1">多 Agent 研判 · 16 节点 · {{ elapsed }}s</p>
+  </div>
+
+  <div class="flex items-center gap-3">
+    <span id="signal-badge" class="text-lg font-bold px-4 py-2 rounded-xl
+      {% if 'BUY' in signal.upper() %}bg-green-900 text-green-400
+      {% elif 'SELL' in signal.upper() %}bg-red-900 text-red-400
+      {% else %}bg-yellow-900 text-yellow-400{% endif %}">
+      {{ signal }}
+    </span>
+    <a href="/report/{{ task_id }}/markdown" class="text-sm bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg transition">📄 MD</a>
+    <a href="/report/{{ task_id }}/pdf" class="text-sm bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg transition">📕 PDF</a>
+  </div>
+</div>
+
+{# ── Stats bar ── #}
+<div class="grid grid-cols-4 gap-4 mb-8">
+  <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
+    <div class="text-2xl font-bold text-emerald-400">{{ llm_calls }}</div>
+    <div class="text-xs text-gray-500 mt-1">LLM 调用</div>
+  </div>
+  <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
+    <div class="text-2xl font-bold text-blue-400">{{ tool_calls }}</div>
+    <div class="text-xs text-gray-500 mt-1">工具调用</div>
+  </div>
+  <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
+    <div class="text-2xl font-bold text-purple-400">{{ tokens_in }}</div>
+    <div class="text-xs text-gray-500 mt-1">输入 Token ↑</div>
+  </div>
+  <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
+    <div class="text-2xl font-bold text-orange-400">{{ tokens_out }}</div>
+    <div class="text-xs text-gray-500 mt-1">输出 Token ↓</div>
+  </div>
+</div>
+
+<div class="flex gap-6">
+  {# ── Sidebar ── #}
+  <aside class="w-56 shrink-0">
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 sticky top-20">
+      <h3 class="text-sm font-semibold text-gray-400 mb-3">报告章节</h3>
+      <nav class="space-y-1" id="section-nav">
+        <a href="#tab-market" class="block text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition nav-link" data-tab="tab-market">📊 技术分析</a>
+        <a href="#tab-sentiment" class="block text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition nav-link" data-tab="tab-sentiment">💬 市场情绪</a>
+        <a href="#tab-news" class="block text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition nav-link" data-tab="tab-news">📰 新闻舆情</a>
+        <a href="#tab-fundamentals" class="block text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition nav-link" data-tab="tab-fundamentals">📋 基本面</a>
+        <a href="#tab-policy" class="block text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition nav-link" data-tab="tab-policy">🏛️ 政策分析</a>
+        <a href="#tab-hot-money" class="block text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition nav-link" data-tab="tab-hot-money">🔥 游资追踪</a>
+        <a href="#tab-lockup" class="block text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition nav-link" data-tab="tab-lockup">🔒 解禁监控</a>
+        <hr class="border-gray-700 my-2">
+        <a href="#tab-quality" class="block text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition nav-link" data-tab="tab-quality">✅ 质量门控</a>
+        <a href="#tab-debate" class="block text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition nav-link" data-tab="tab-debate">⚔️ 多空辩论</a>
+        <a href="#tab-trader" class="block text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition nav-link" data-tab="tab-trader">💹 交易方案</a>
+        <a href="#tab-risk" class="block text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition nav-link" data-tab="tab-risk">🛡️ 风控评估</a>
+        <a href="#tab-pm" class="block text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition nav-link" data-tab="tab-pm">👔 最终决策</a>
+      </nav>
+    </div>
+  </aside>
+
+  {# ── Main content ── #}
+  <div class="flex-1 min-w-0">
+
+    {# Report tabs #}
+    <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-6">
+      <div class="flex border-b border-gray-800 overflow-x-auto" id="tab-headers">
+        <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-emerald-500 text-emerald-400 whitespace-nowrap" data-tab="tab-market">技术分析</button>
+        <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-sentiment">情绪</button>
+        <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-news">新闻</button>
+        <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-fundamentals">基本面</button>
+        <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-policy">政策</button>
+        <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-hot-money">游资</button>
+        <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-lockup">解禁</button>
+        <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-quality">质量门控</button>
+        <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-debate">多空辩论</button>
+        <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-trader">交易方案</button>
+        <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-risk">风控评估</button>
+        <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-pm">最终决策</button>
+      </div>
+
+      <div class="p-6 min-h-96" id="report-content">
+        {# ── Tab panels — raw markdown, JS renders it with marked.parse() ── #}
+        <div id="tab-market" class="tab-panel">
+          <div class="report-raw prose prose-invert prose-sm max-w-none prose-headings:text-gray-100 prose-p:text-gray-300 prose-strong:text-gray-100 prose-code:text-emerald-400 prose-a:text-emerald-400 prose-table:text-gray-300">{{ reports.market_report or '（暂无数据）' }}</div>
+        </div>
+        <div id="tab-sentiment" class="tab-panel hidden">
+          <div class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.sentiment_report or '（暂无数据）' }}</div>
+        </div>
+        <div id="tab-news" class="tab-panel hidden">
+          <div class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.news_report or '（暂无数据）' }}</div>
+        </div>
+        <div id="tab-fundamentals" class="tab-panel hidden">
+          <div class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.fundamentals_report or '（暂无数据）' }}</div>
+        </div>
+        <div id="tab-policy" class="tab-panel hidden">
+          <div class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.policy_report or '（暂无数据）' }}</div>
+        </div>
+        <div id="tab-hot-money" class="tab-panel hidden">
+          <div class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.hot_money_report or '（暂无数据）' }}</div>
+        </div>
+        <div id="tab-lockup" class="tab-panel hidden">
+          <div class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.lockup_report or '（暂无数据）' }}</div>
+        </div>
+        <div id="tab-quality" class="tab-panel hidden">
+          <div class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.data_quality_summary or '（暂无数据）' }}</div>
+        </div>
+        <div id="tab-debate" class="tab-panel hidden">
+          <div class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.investment_plan or '（暂无数据）' }}</div>
+        </div>
+        <div id="tab-trader" class="tab-panel hidden">
+          <div class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.trader_investment_plan or '（暂无数据）' }}</div>
+        </div>
+        <div id="tab-risk" class="tab-panel hidden">
+          <div class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.risk_judge_decision or '（暂无数据）' }}</div>
+        </div>
+        <div id="tab-pm" class="tab-panel hidden">
+          <div class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.final_trade_decision or '（暂无数据）' }}</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+  .prose table { border-collapse: collapse; width: 100%; }
+  .prose th, .prose td { border: 1px solid #374151; padding: 6px 10px; }
+  .prose th { background: #1f2937; }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Tab switching
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+    document.querySelectorAll('.tab-btn').forEach(b => {
+      b.classList.remove('border-emerald-500', 'text-emerald-400');
+      b.classList.add('border-transparent', 'text-gray-400');
+    });
+    const tab = btn.dataset.tab;
+    document.getElementById(tab)?.classList.remove('hidden');
+    btn.classList.add('border-emerald-500', 'text-emerald-400');
+    btn.classList.remove('border-transparent', 'text-gray-400');
+  });
+});
+
+// Sidebar nav link also triggers tab
+document.querySelectorAll('.nav-link').forEach(link => {
+  link.addEventListener('click', (e) => {
+    const tab = link.dataset.tab;
+    const btn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+    if (btn) btn.click();
+  });
+});
+
+// Render markdown in all report-raw elements
+document.querySelectorAll('.report-raw').forEach(el => {
+  const raw = el.textContent || '';
+  if (raw && raw !== '（暂无数据）') {
+    try { el.innerHTML = marked.parse(raw); } catch (_) {}
+  }
+});
+
+// Activate first non-empty tab on load
+document.querySelector('.tab-btn').click();
+</script>
+{% endblock %}

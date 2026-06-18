@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}分析失败 — TradingAgents-Astock{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+  <div class="bg-red-900/30 border border-red-800 rounded-xl p-8 text-center">
+    <div class="text-5xl mb-4">❌</div>
+    <h1 class="text-2xl font-bold text-red-400 mb-4">分析失败</h1>
+    <p class="text-gray-400 mb-2">标的: <span class="text-white font-medium">{{ ticker }}</span></p>
+    <p class="text-gray-400 mb-2">日期: <span class="text-white font-medium">{{ trade_date }}</span></p>
+    <p class="text-gray-400 mb-2">任务 ID: <code class="text-emerald-400">{{ task_id }}</code></p>
+
+    {% if error %}
+    <div class="mt-6 text-left">
+      <h3 class="text-sm font-semibold text-gray-400 mb-2">错误信息:</h3>
+      <pre class="bg-gray-900 border border-red-800 rounded-lg p-4 text-red-300 text-sm overflow-x-auto">{{ error }}</pre>
+    </div>
+    {% endif %}
+
+    <div class="mt-8 flex gap-4 justify-center">
+      <a href="/" class="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-6 py-2 rounded-lg transition">← 重新发起分析</a>
+      <a href="/tasks" class="bg-gray-800 hover:bg-gray-700 text-white px-6 py-2 rounded-lg transition">任务列表</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

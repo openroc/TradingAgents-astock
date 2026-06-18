@@ -14,6 +14,11 @@ authors = [
 ]
 
 dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.27.0",
+    "pydantic>=2.0.0",
+    "jinja2>=3.1.0",
+    "passlib[bcrypt]>=1.7.4",
     "langchain-core>=0.3.81",
     "backtrader>=1.9.78.123",
     "langchain-anthropic>=0.3.15",
@@ -54,9 +59,10 @@ google = ["langchain-google-genai>=4.0.0"]
 [project.scripts]
 tradingagents = "cli.main:app"
 tradingagents-web = "web.launch:main"
+tradingagents-api = "web_fastapi.main:app"
 
 [tool.setuptools.packages.find]
-include = ["tradingagents*", "cli*", "web*"]
+include = ["tradingagents*", "cli*", "web*", "web_fastapi*"]
 
 [tool.setuptools.package-data]
 cli = ["static/*"]

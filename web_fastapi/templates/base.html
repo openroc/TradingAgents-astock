@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}TradingAgents-Astock{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', -apple-system, sans-serif; }
+    .signal-buy { color: #22c55e; }
+    .signal-sell { color: #ef4444; }
+    .signal-hold { color: #f59e0b; }
+    .stage-done { background-color: #dcfce7; color: #166534; }
+    .stage-active { background-color: #fef9c3; color: #854d0e; }
+    .stage-pending { background-color: #f3f4f6; color: #6b7280; }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen">
+  <nav class="border-b border-gray-800 bg-gray-900/80 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <a href="/" class="text-lg font-bold text-emerald-400 tracking-tight">
+        📈 TradingAgents-Astock
+      </a>
+      <div class="flex items-center gap-6 text-sm text-gray-400">
+        <a href="/" class="hover:text-emerald-400 transition">发起分析</a>
+        <a href="/tasks" class="hover:text-emerald-400 transition">任务列表</a>
+        <span id="nav-user" class="hidden items-center gap-3">
+          <a href="/auth/change-password" class="hover:text-yellow-400 transition">修改密码</a>
+          <span id="nav-username" class="text-emerald-400 font-medium"></span>
+          <span class="text-gray-600 mx-1">·</span>
+          <a href="#" id="nav-logout" class="hover:text-red-400 transition">退出</a>
+        </span>
+      </div>
+    </div>
+  </nav>
+  <script>
+    // Fetch current user and update nav
+    fetch('/auth/me', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(user => {
+        if (user) {
+          document.getElementById('nav-username').textContent = user.username;
+          document.getElementById('nav-user').classList.remove('hidden');
+          document.getElementById('nav-logout').onclick = async (e) => {
+            e.preventDefault();
+            await fetch('/auth/logout', { method: 'POST', credentials: 'include' });
+            window.location.href = '/auth/login';
+          };
+        }
+      }).catch(() => {});
+  </script>
+
+  <main class="max-w-7xl mx-auto px-4 py-8">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="border-t border-gray-800 mt-16 py-6 text-center text-xs text-gray-500">
+    TradingAgents-Astock · 基于 LangGraph 多 Agent 投研框架
+  </footer>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

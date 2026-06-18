@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}发起分析 — TradingAgents-Astock{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+  <h1 class="text-3xl font-bold mb-2">发起 A 股分析</h1>
+  <p class="text-gray-400 mb-8">输入股票代码和参数，系统将自动运行 16 节点多 Agent 研判流程</p>
+
+  <form id="analysis-form" class="space-y-6 bg-gray-900 border border-gray-800 rounded-xl p-8">
+    {# Ticker #}
+    <div>
+      <label class="block text-sm font-medium text-gray-300 mb-2">股票代码</label>
+      <input type="text" name="ticker" id="ticker"
+             placeholder="例如: 600519.sh, 000001.sz"
+             class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+             required>
+      <p class="mt-1 text-xs text-gray-500">沪市加 .sh，深市加 .sz</p>
+    </div>
+
+    {# Trade date #}
+    <div>
+      <label class="block text-sm font-medium text-gray-300 mb-2">交易日期</label>
+      <input type="date" name="trade_date" id="trade_date"
+             class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+    </div>
+
+    {# LLM Provider #}
+    <div>
+      <label class="block text-sm font-medium text-gray-300 mb-2">LLM Provider</label>
+      <select name="llm_provider" id="llm_provider"
+              class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+        <option value="oneapi">OneAPI (本地代理)</option>
+        <option value="openai">OpenAI</option>
+        <option value="deepseek">DeepSeek</option>
+        <option value="qwen">Qwen (通义千问)</option>
+        <option value="anthropic">Anthropic (Claude)</option>
+        <option value="google">Google (Gemini)</option>
+        <option value="ollama">Ollama (本地)</option>
+      </select>
+    </div>
+
+    {# Backend URL #}
+    <div>
+      <label class="block text-sm font-medium text-gray-300 mb-2">API 端点 (可选)</label>
+      <input type="url" name="backend_url" id="backend_url"
+             placeholder="http://192.168.3.9:4000/v1"
+             class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+      <p class="mt-1 text-xs text-gray-500">留空则使用默认端点</p>
+    </div>
+
+    {# Debate rounds #}
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-300 mb-2">多空辩论轮次</label>
+        <input type="number" name="max_debate_rounds" id="max_debate_rounds"
+               value="1" min="1" max="5"
+               class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-300 mb-2">风控辩论轮次</label>
+        <input type="number" name="max_risk_discuss_rounds" id="max_risk_discuss_rounds"
+               value="1" min="1" max="5"
+               class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+      </div>
+    </div>
+
+    {# Output language #}
+    <div>
+      <label class="block text-sm font-medium text-gray-300 mb-2">报告语言</label>
+      <select name="output_language" id="output_language"
+              class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+        <option value="Chinese">中文</option>
+        <option value="English">English</option>
+      </select>
+    </div>
+
+    <button type="submit" id="submit-btn"
+            class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 rounded-lg transition">
+      🚀 发起分析
+    </button>
+
+    <div id="error-msg" class="hidden text-red-400 text-sm text-center"></div>
+  </form>
+
+  <div id="task-result" class="hidden mt-6 p-6 bg-gray-900 border border-gray-700 rounded-xl">
+    <p class="text-gray-400 mb-3">任务已创建，等待分析完成...</p>
+    <div class="flex items-center gap-3">
+      <span class="text-xs text-gray-500">任务 ID: <code id="task-id-display" class="text-emerald-400"></code></span>
+      <a id="status-url" href="#" class="text-sm text-emerald-400 hover:underline">→ 查看进度</a>
+    </div>
+    <div class="mt-4 flex gap-3">
+      <button id="btn-poll" class="text-sm bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg transition">🔄 刷新状态</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const form = document.getElementById('analysis-form');
+const resultDiv = document.getElementById('task-result');
+const taskIdDisplay = document.getElementById('task-id-display');
+const statusUrl = document.getElementById('status-url');
+const errorMsg = document.getElementById('error-msg');
+let currentTaskId = null;
+let pollInterval = null;
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  errorMsg.classList.add('hidden');
+
+  const data = {
+    ticker: document.getElementById('ticker').value.trim(),
+    trade_date: document.getElementById('trade_date').value || null,
+    llm_provider: document.getElementById('llm_provider').value,
+    backend_url: document.getElementById('backend_url').value || null,
+    max_debate_rounds: parseInt(document.getElementById('max_debate_rounds').value),
+    max_risk_discuss_rounds: parseInt(document.getElementById('max_risk_discuss_rounds').value),
+    output_language: document.getElementById('output_language').value,
+  };
+
+  try {
+    const resp = await fetch('/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.detail || '创建任务失败');
+    }
+    const json = await resp.json();
+    currentTaskId = json.task_id;
+    taskIdDisplay.textContent = currentTaskId;
+    statusUrl.href = `/report/${currentTaskId}`;
+    resultDiv.classList.remove('hidden');
+    form.classList.add('hidden');
+    startPolling();
+  } catch (err) {
+    errorMsg.textContent = err.message;
+    errorMsg.classList.remove('hidden');
+  }
+});
+
+document.getElementById('btn-poll')?.addEventListener('click', () => {
+  if (currentTaskId) window.location.href = `/report/${currentTaskId}`;
+});
+
+function startPolling() {
+  pollInterval = setInterval(async () => {
+    if (!currentTaskId) return;
+    try {
+      const resp = await fetch(`/tasks/${currentTaskId}`);
+      if (!resp.ok) return;
+      const data = await resp.json();
+      if (data.status === 'completed') {
+        clearInterval(pollInterval);
+        window.location.href = `/report/${currentTaskId}`;
+      } else if (data.status === 'error') {
+        clearInterval(pollInterval);
+        alert('分析失败: ' + data.error);
+      }
+    } catch (_) {}
+  }, 5000);
+}
+</script>
+{% endblock %}

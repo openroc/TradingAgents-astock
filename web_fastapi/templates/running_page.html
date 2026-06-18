@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}分析中 — {{ ticker }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+
+  {# ── Header ── #}
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-bold text-emerald-400">{{ ticker }}</h1>
+      <p class="text-gray-400 text-sm">{{ trade_date }} · 分析中...</p>
+    </div>
+    <span class="bg-yellow-900 text-yellow-400 px-4 py-2 rounded-xl font-semibold text-sm animate-pulse">🔄 运行中</span>
+  </div>
+
+  {# ── Stats bar ── #}
+  <div class="grid grid-cols-4 gap-4 mb-8">
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
+      <div class="text-2xl font-bold text-emerald-400">{{ llm_calls }}</div>
+      <div class="text-xs text-gray-500 mt-1">LLM 调用</div>
+    </div>
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
+      <div class="text-2xl font-bold text-blue-400">{{ tool_calls }}</div>
+      <div class="text-xs text-gray-500 mt-1">工具调用</div>
+    </div>
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
+      <div class="text-2xl font-bold text-purple-400">{{ tokens_in }}</div>
+      <div class="text-xs text-gray-500 mt-1">输入 Token ↑</div>
+    </div>
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
+      <div class="text-2xl font-bold text-orange-400">{{ elapsed }}s</div>
+      <div class="text-xs text-gray-500 mt-1">已耗时</div>
+    </div>
+  </div>
+
+  {# ── Stage progress ── #}
+  <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-6">
+    <h2 class="text-sm font-semibold text-gray-400 mb-4">📊 分析进度</h2>
+    <div class="space-y-2" id="stage-list">
+    </div>
+    <p class="text-sm text-gray-500 mt-4">
+      当前阶段: <span class="text-yellow-400 font-medium" id="current-stage">{{ current_stage or '准备中' }}</span>
+    </p>
+  </div>
+
+  {# ── Auto-refresh ── #}
+  <div class="text-center">
+    <p class="text-gray-500 text-sm mb-4">页面每 5 秒自动刷新...</p>
+    <a href="/tasks/{{ task_id }}" class="inline-block bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-6 py-2 rounded-lg transition">🔄 刷新</a>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const STAGE_NAMES = {
+  "market": "📊 技术分析",
+  "social": "💬 市场情绪",
+  "news": "📰 新闻舆情",
+  "fundamentals": "📋 基本面",
+  "policy": "🏛️ 政策分析",
+  "hot_money": "🔥 游资追踪",
+  "lockup": "🔒 解禁监控",
+  "quality_gate": "✅ 质量门控",
+  "debate": "⚔️ 多空辩论",
+  "trader": "💹 交易方案",
+  "risk": "🛡️ 风控评估",
+  "pm": "👔 最终决策",
+};
+
+const completed = {{ completed_stages | tojson }};
+const current = {{ (current_stage or "") | tojson }};
+const allStages = Object.keys(STAGE_NAMES);
+
+const stageList = document.getElementById('stage-list');
+allStages.forEach(id => {
+  const name = STAGE_NAMES[id] || id;
+  const isDone = completed.includes(id);
+  const isCurrent = id === current;
+  const cls = isDone ? 'text-green-400' : isCurrent ? 'text-yellow-400' : 'text-gray-600';
+  const icon = isDone ? '✅' : isCurrent ? '⏳' : '⬜';
+  const el = document.createElement('div');
+  el.className = 'flex items-center gap-2 text-sm ' + cls;
+  el.textContent = icon + ' ' + name;
+  stageList.appendChild(el);
+});
+
+setTimeout(() => { location.reload(); }, 5000);
+</script>
+{% endblock %}

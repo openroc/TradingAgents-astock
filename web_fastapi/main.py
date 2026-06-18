@@ -1,0 +1,99 @@
+"""FastAPI application entry point — TradingAgents-Astock Web API."""
+
+from __future__ import annotations
+
+import argparse
+import sys
+import logging
+from pathlib import Path
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
+from fastapi.templating import Jinja2Templates
+from starlette.requests import Request
+
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_PROJECT_ROOT))
+
+from web_fastapi.routers import tasks, report, auth as auth_router, admin
+from web_fastapi.auth import SESSION_COOKIE, _get_session
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("TradingAgents-Astock FastAPI server started")
+    yield
+    logger.info("TradingAgents-Astock FastAPI server shutting down")
+
+
+app = FastAPI(
+    title="TradingAgents-Astock API",
+    description="多 Agent A 股投研框架 - 基于 LangGraph 的智能分析服务",
+    version="0.2.11",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    lifespan=lifespan,
+)
+
+# ── CORS ──────────────────────────────────────────────────────────────────────
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ── Static & templates ─────────────────────────────────────────────────────────
+app.mount("/static", StaticFiles(directory=_PROJECT_ROOT / "assets"), name="static")
+
+templates = Jinja2Templates(directory=_PROJECT_ROOT / "web_fastapi" / "templates")
+
+
+# ── Routers ───────────────────────────────────────────────────────────────────
+app.include_router(auth_router.router)
+app.include_router(admin.router)
+app.include_router(tasks.router)
+app.include_router(report.router)
+
+
+# ── Root — check auth, redirect to login if not authenticated ─────────────────
+@app.get("/", include_in_schema=False)
+def root(request: Request):
+    token = request.cookies.get(SESSION_COOKIE)
+    if not token or not _get_session(token):
+        return RedirectResponse(url="/auth/login", status_code=302)
+    return templates.TemplateResponse(request, "task_form.html", {"request": request})
+
+
+# ── Health check ─────────────────────────────────────────────────────────────
+@app.get("/health", tags=["system"])
+def health():
+    return {"status": "ok", "service": "TradingAgents-Astock"}
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    parser = argparse.ArgumentParser(description="TradingAgents-Astock FastAPI Server")
+    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--reload", action="store_true", default=True)
+    args = parser.parse_args()
+
+    uvicorn.run(
+        "web_fastapi.main:app",
+        host=args.host,
+        port=args.port,
+        reload=args.reload,
+        log_level="info",
+    )

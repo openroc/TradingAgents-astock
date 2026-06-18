@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}任务列表 - TradingAgents-Astock{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold">📋 分析任务列表</h1>
+    <a href="/" class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm px-4 py-2 rounded-lg transition">+ 新建分析</a>
+  </div>
+
+  <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-800 text-gray-400">
+        <tr>
+          <th class="text-left px-4 py-3 font-medium">任务 ID</th>
+          <th class="text-left px-4 py-3 font-medium">股票</th>
+          <th class="text-left px-4 py-3 font-medium">日期</th>
+          <th class="text-left px-4 py-3 font-medium">状态</th>
+          <th class="text-left px-4 py-3 font-medium">信号</th>
+          <th class="text-left px-4 py-3 font-medium">耗时</th>
+          <th class="text-left px-4 py-3 font-medium">操作</th>
+        </tr>
+      </thead>
+      <tbody id="tasks-body" class="divide-y divide-gray-800">
+        <tr>
+          <td colspan="7" class="px-4 py-8 text-center text-gray-500">加载中...</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="flex justify-between items-center px-4 py-3 border-t border-gray-800 text-sm text-gray-500">
+      <span id="pagination-info"></span>
+      <div class="flex gap-2">
+        <button id="prev-page" class="px-3 py-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-40">上一页</button>
+        <button id="next-page" class="px-3 py-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-40">下一页</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentPage = 1;
+
+async function loadTasks(page = 1) {
+  try {
+    const resp = await fetch(`/tasks/list?page=${page}&page_size=20`);
+    if (!resp.ok) {
+      document.getElementById('tasks-body').innerHTML =
+        `<tr><td colspan="7" class="px-4 py-8 text-center text-red-400">HTTP ${resp.status}</td></tr>`;
+      return;
+    }
+    const data = await resp.json();
+    renderTasks(data);
+  } catch (err) {
+    document.getElementById('tasks-body').innerHTML =
+      '<tr><td colspan="7" class="px-4 py-8 text-center text-red-400">加载失败: ' + err.message + '</td></tr>';
+  }
+}
+
+function renderTasks(data) {
+  const tbody = document.getElementById('tasks-body');
+  const totalPages = data.total > 0 ? Math.ceil(data.total / (data.page_size || 20)) : 0;
+  document.getElementById('pagination-info').textContent =
+    `共 ${data.total} 条，第 ${data.page} / ${totalPages} 页`;
+  document.getElementById('prev-page').disabled = data.page <= 1;
+  document.getElementById('next-page').disabled = data.page >= totalPages;
+
+  if (!data.items || data.items.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">暂无任务</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = data.items.map(task => {
+    const statusColor = task.status === 'completed' ? 'bg-green-900 text-green-400'
+      : task.status === 'running' ? 'bg-yellow-900 text-yellow-400'
+      : task.status === 'error' ? 'bg-red-900 text-red-400' : 'bg-gray-700 text-gray-400';
+    const action = task.status === 'completed'
+      ? `<a href="/report/${task.task_id}" class="text-emerald-400 hover:underline">查看报告</a>`
+      : task.status === 'running'
+      ? `<a href="/report/${task.task_id}" class="text-yellow-400 hover:underline">查看进度</a>`
+      : `<span class="text-gray-500">-</span>`;
+    const elapsed = task.elapsed > 0 ? `${task.elapsed.toFixed(1)}s` : '-';
+    return `<tr class="hover:bg-gray-800/50">
+      <td class="px-4 py-3 font-mono text-emerald-400">${task.task_id}</td>
+      <td class="px-4 py-3 font-medium">${task.ticker}</td>
+      <td class="px-4 py-3 text-gray-400">${task.trade_date}</td>
+      <td class="px-4 py-3"><span class="px-2 py-0.5 rounded text-xs ${statusColor}">${task.status}</span></td>
+      <td class="px-4 py-3 text-sm">${task.signal || '-'}</td>
+      <td class="px-4 py-3 text-gray-400">${elapsed}</td>
+      <td class="px-4 py-3">${action}</td>
+    </tr>`;
+  }).join('');
+}
+
+document.getElementById('prev-page').addEventListener('click', () => {
+  if (currentPage > 1) { currentPage--; loadTasks(currentPage); }
+});
+document.getElementById('next-page').addEventListener('click', () => {
+  currentPage++; loadTasks(currentPage);
+});
+
+loadTasks(currentPage);
+</script>
+{% endblock %}
