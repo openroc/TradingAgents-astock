@@ -35,18 +35,27 @@ def _init_data_dir():
 # ── Password hashing (bcrypt via passlib or fallback sha256) ───────────────────
 
 import hashlib
+import io
+import sys
 
 _has_bcrypt = False
 try:
-    from passlib.context import CryptContext
+    # Suppress passlib's "trapped error reading bcrypt version" traceback on stderr
+    _old_stderr = sys.stderr
+    sys.stderr = io.StringIO()
+    try:
+        from passlib.context import CryptContext
 
-    _pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
-    # Test round-trip to catch bcrypt 5.x / passlib incompatibility
-    _test_hash = _pwd_ctx.hash("__passlib_test__")
-    assert _pwd_ctx.verify("__passlib_test__", _test_hash)
-    _has_bcrypt = True
+        _pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        # Test round-trip to catch bcrypt 5.x / passlib incompatibility
+        _test_hash = _pwd_ctx.hash("__passlib_test__")
+        assert _pwd_ctx.verify("__passlib_test__", _test_hash)
+        _has_bcrypt = True
+    finally:
+        sys.stderr = _old_stderr
 except Exception:
     # bcrypt unavailable or broken (e.g. bcrypt 5.x + passlib incompatibility) — use sha256
+    sys.stderr = _old_stderr if "_old_stderr" in dir() else sys.stderr
     _pwd_ctx = None
     logger.warning("bcrypt unavailable; using sha256 for password hashing (less secure)")
 

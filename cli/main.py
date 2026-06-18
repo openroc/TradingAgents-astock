@@ -1244,5 +1244,108 @@ def analyze(
     run_analysis(checkpoint=checkpoint, auto_save_report=auto_save_report)
 
 
+# ── User management ─────────────────────────────────────────────────────────────
+
+users_app = typer.Typer(help="Manage web UI users", add_completion=False)
+app.add_typer(users_app, name="users")
+
+
+@users_app.command("add")
+def users_add(
+    username: str = typer.Argument(..., help="Username for the new account"),
+    password: str = typer.Argument(..., help="Initial password"),
+    admin: bool = typer.Option(False, "--admin", help="Grant admin privileges"),
+    max_concurrency: int = typer.Option(2, "--max-concurrency", help="Max concurrent analysis tasks"),
+    default_model: str = typer.Option("MiniMax-M2.7", "--default-model", help="Default LLM model"),
+    default_provider: str = typer.Option("oneapi", "--default-provider", help="Default LLM provider"),
+):
+    """Create a new web UI user."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from web_fastapi.user_store import create_user
+    try:
+        user = create_user(
+            username=username,
+            password=password,
+            is_admin=admin,
+            max_concurrency=max_concurrency,
+            default_model=default_model,
+            default_provider=default_provider,
+        )
+        console.print(f"[green]User created:[/green] {user.username} (id={user.id}, admin={user.is_admin})")
+    except ValueError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(1)
+
+
+@users_app.command("list")
+def users_list():
+    """List all web UI users."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from web_fastapi.user_store import list_users
+
+    users = list_users()
+    if not users:
+        console.print("[yellow]No users found.[/yellow]")
+        return
+
+    from rich.table import Table
+    table = Table(show_header=True, header_style="bold magenta")
+    table.add_column("ID")
+    table.add_column("Username")
+    table.add_column("Admin")
+    table.add_column("Concurrency")
+    table.add_column("Model")
+    table.add_column("Provider")
+
+    for u in users:
+        table.add_row(
+            u.id,
+            u.username,
+            "✓" if u.is_admin else "✗",
+            str(u.max_concurrency),
+            u.default_model,
+            u.default_provider,
+        )
+    console.print(table)
+
+
+@users_app.command("delete")
+def users_delete(
+    username: str = typer.Argument(..., help="Username to delete"),
+    force: bool = typer.Option(False, "--force", help="Skip confirmation prompt"),
+):
+    """Delete a web UI user by username."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from web_fastapi.user_store import get_user_by_username, delete_user, list_users
+
+    user = get_user_by_username(username)
+    if user is None:
+        console.print(f"[red]Error:[/red] User '{username}' not found.")
+        raise typer.Exit(1)
+
+    if not force:
+        confirm = typer.prompt(
+            f"Delete user '{username}' (id={user.id})? Type '{username}' to confirm",
+            default="",
+        )
+        if confirm != username:
+            console.print("[yellow]Aborted.[/yellow]")
+            raise typer.Exit(0)
+
+    try:
+        ok = delete_user(user.id)
+        if ok:
+            console.print(f"[green]Deleted:[/green] {username}")
+        else:
+            console.print(f"[red]Error:[/red] Failed to delete '{username}'.")
+            raise typer.Exit(1)
+    except ValueError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(1)
+
+
 if __name__ == "__main__":
     app()
