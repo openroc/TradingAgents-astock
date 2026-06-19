@@ -32,8 +32,10 @@
       {% else %}bg-yellow-900 text-yellow-400{% endif %}">
       {{ signal }}
     </span>
+    {% if status == 'completed' %}
     <a href="/report/{{ task_id }}/markdown" class="text-sm bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg transition">📄 MD</a>
     <a href="/report/{{ task_id }}/pdf" class="text-sm bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg transition">📕 PDF</a>
+    {% endif %}
   </div>
 </div>
 
@@ -290,6 +292,24 @@ async function poll() {
       updateReportContent(data);
       document.getElementById('running-panel').classList.add('hidden');
       document.getElementById('error-panel').classList.add('hidden');
+      // Show download buttons now that the task is done
+      const taskId = document.querySelector('[data-task-id]')?.dataset.taskId
+        || window.location.pathname.split('/report/')[1]?.split('/')[0];
+      if (taskId) {
+        const btnArea = document.querySelector('#hdr-signal-badge')?.parentElement;
+        if (btnArea && !btnArea.querySelector('.btn-md')) {
+          const md = document.createElement('a');
+          md.href = `/report/${taskId}/markdown`;
+          md.className = 'btn-md text-sm bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg transition';
+          md.textContent = '📄 MD';
+          const pdf = document.createElement('a');
+          pdf.href = `/report/${taskId}/pdf`;
+          pdf.className = 'text-sm bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg transition';
+          pdf.textContent = '📕 PDF';
+          btnArea.appendChild(md);
+          btnArea.appendChild(pdf);
+        }
+      }
     } else if (data.status === 'error' || data.status === 'abort') {
       document.getElementById('running-panel').classList.add('hidden');
       document.getElementById('error-panel').classList.remove('hidden');
