@@ -43,6 +43,53 @@ def get_store(user_id: str) -> TaskStore:
         return _store_cache[user_id]
 
 
+def get_store_for_task(task_id: str) -> tuple[TaskStore, Optional[AnalysisTask]]:
+    """Find the store containing a task by task_id.
+
+    Searches per-user stores (cached + on disk) and falls back to the old
+    shared tasks.json for tasks not yet migrated. Used by runner.py which only
+    knows task_id, not user_id.
+    """
+    # 1. Check in-memory cache of per-user stores
+    with _cache_lock:
+        for uid, store in _store_cache.items():
+            with store._lock:
+                if task_id in store._tasks:
+                    return store, store._tasks[task_id]
+
+    # 2. Check per-user files not yet loaded into cache
+    if _DATA_DIR.exists():
+        for f in _DATA_DIR.iterdir():
+            if f.name.startswith("tasks_") and f.name.endswith(".json"):
+                try:
+                    data = json.loads(f.read_text(encoding="utf-8"))
+                    for d in data.get("tasks", []):
+                        if d.get("task_id") == task_id:
+                            uid = f.stem  # "tasks_u_xxx" → "u_xxx"
+                            store = get_store(uid)
+                            with store._lock:
+                                if task_id in store._tasks:
+                                    return store, store._tasks[task_id]
+                except Exception:
+                    pass
+
+    # 3. Fall back to old shared tasks.json (pre-migration)
+    if _OLD_TASKS_FILE.exists():
+        try:
+            data = json.loads(_OLD_TASKS_FILE.read_text(encoding="utf-8"))
+            for d in data.get("tasks", []):
+                if d.get("task_id") == task_id:
+                    uid = d.get("user_id", "unknown")
+                    store = get_store(uid)
+                    with store._lock:
+                        if task_id in store._tasks:
+                            return store, store._tasks[task_id]
+        except Exception:
+            pass
+
+    return get_store("unknown"), None
+
+
 # ── Task model ──────────────────────────────────────────────────────────────────
 
 @dataclass
