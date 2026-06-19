@@ -28,25 +28,25 @@
     {# LLM Provider #}
     <div>
       <label class="block text-sm font-medium text-gray-300 mb-2">LLM Provider</label>
-      <select name="llm_provider" id="llm_provider"
-              class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
-        <option value="oneapi">OneAPI (本地代理)</option>
-        <option value="openai">OpenAI</option>
-        <option value="deepseek">DeepSeek</option>
-        <option value="qwen">Qwen (通义千问)</option>
-        <option value="anthropic">Anthropic (Claude)</option>
-        <option value="google">Google (Gemini)</option>
-        <option value="ollama">Ollama (本地)</option>
-      </select>
+      <div class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white">
+        {{ user_provider }}
+      </div>
+    </div>
+
+    {# Model #}
+    <div>
+      <label class="block text-sm font-medium text-gray-300 mb-2">模型</label>
+      <div class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white">
+        {{ user_model }}
+      </div>
     </div>
 
     {# Backend URL #}
     <div>
-      <label class="block text-sm font-medium text-gray-300 mb-2">API 端点 (可选)</label>
-      <input type="url" name="backend_url" id="backend_url"
-             placeholder="http://192.168.3.9:4000/v1"
-             class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-      <p class="mt-1 text-xs text-gray-500">留空则使用默认端点</p>
+      <label class="block text-sm font-medium text-gray-300 mb-2">API 端点</label>
+      <div class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white text-sm truncate">
+        {{ user_backend_url or '默认端点' }}
+      </div>
     </div>
 
     {# Debate rounds #}
@@ -113,8 +113,6 @@ form.addEventListener('submit', async (e) => {
   const data = {
     ticker: document.getElementById('ticker').value.trim(),
     trade_date: document.getElementById('trade_date').value || null,
-    llm_provider: document.getElementById('llm_provider').value,
-    backend_url: document.getElementById('backend_url').value || null,
     max_debate_rounds: parseInt(document.getElementById('max_debate_rounds').value),
     max_risk_discuss_rounds: parseInt(document.getElementById('max_risk_discuss_rounds').value),
     output_language: document.getElementById('output_language').value,

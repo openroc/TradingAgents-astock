@@ -15,6 +15,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
+from web_fastapi.user_store import get_user_by_id
+from web_fastapi.config import DEFAULT_BACKEND_URLS
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_PROJECT_ROOT))
@@ -73,7 +75,18 @@ def root(request: Request):
     token = request.cookies.get(SESSION_COOKIE)
     if not token or not _get_session(token):
         return RedirectResponse(url="/auth/login", status_code=302)
-    return templates.TemplateResponse(request, "task_form.html", {"request": request, "today": str(date.today())})
+    session = _get_session(token)
+    user = get_user_by_id(session.user_id)
+    provider = user.default_provider if user else "oneapi"
+    model = user.default_model if user else "MiniMax-M2.7"
+    backend_url = DEFAULT_BACKEND_URLS.get(provider, "")
+    return templates.TemplateResponse(request, "task_form.html", {
+        "request": request,
+        "today": str(date.today()),
+        "user_provider": provider,
+        "user_model": model,
+        "user_backend_url": backend_url or "",
+    })
 
 
 # ── Health check ─────────────────────────────────────────────────────────────
