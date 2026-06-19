@@ -32,6 +32,7 @@ _cache_lock = threading.Lock()
 
 
 def _tasks_file(user_id: str) -> Path:
+    # user_id already contains the full prefix, e.g. "u_0a9abdb0"
     return _DATA_DIR / f"tasks_{user_id}.json"
 
 
@@ -49,15 +50,19 @@ def get_store_for_task(task_id: str) -> tuple[TaskStore, Optional[AnalysisTask]]
     Searches per-user stores (cached + on disk) and falls back to the old
     shared tasks.json for tasks not yet migrated. Used by runner.py which only
     knows task_id, not user_id.
+
+    This function must NOT modify _store_cache during iteration, so it first
+    scans files read-only to find the owning user, then loads that one store.
     """
-    # 1. Check in-memory cache of per-user stores
+    # 1. Check in-memory cache (no cache modification here)
     with _cache_lock:
-        for uid, store in _store_cache.items():
+        for store in list(_store_cache.values()):
             with store._lock:
                 if task_id in store._tasks:
                     return store, store._tasks[task_id]
 
-    # 2. Check per-user files not yet loaded into cache
+    # 2. Scan per-user files read-only to find the task's user_id
+    uid_found = None
     if _DATA_DIR.exists():
         for f in _DATA_DIR.iterdir():
             if f.name.startswith("tasks_") and f.name.endswith(".json"):
@@ -65,29 +70,29 @@ def get_store_for_task(task_id: str) -> tuple[TaskStore, Optional[AnalysisTask]]
                     data = json.loads(f.read_text(encoding="utf-8"))
                     for d in data.get("tasks", []):
                         if d.get("task_id") == task_id:
-                            uid = f.stem  # "tasks_u_xxx" → "u_xxx"
-                            store = get_store(uid)
-                            with store._lock:
-                                if task_id in store._tasks:
-                                    return store, store._tasks[task_id]
+                            uid_found = d.get("user_id")
+                            break
                 except Exception:
                     pass
+            if uid_found:
+                break
 
-    # 3. Fall back to old shared tasks.json (pre-migration)
-    if _OLD_TASKS_FILE.exists():
+    # 3. Fall back to old shared tasks.json
+    if uid_found is None and _OLD_TASKS_FILE.exists():
         try:
             data = json.loads(_OLD_TASKS_FILE.read_text(encoding="utf-8"))
             for d in data.get("tasks", []):
                 if d.get("task_id") == task_id:
-                    uid = d.get("user_id", "unknown")
-                    store = get_store(uid)
-                    with store._lock:
-                        if task_id in store._tasks:
-                            return store, store._tasks[task_id]
+                    uid_found = d.get("user_id") or "unknown"
+                    break
         except Exception:
             pass
 
-    return get_store("unknown"), None
+    # Now load the owning store (this may modify _store_cache safely)
+    uid = uid_found or "unknown"
+    store = get_store(uid)
+    with store._lock:
+        return store, store._tasks.get(task_id)
 
 
 # ── Task model ──────────────────────────────────────────────────────────────────
@@ -116,7 +121,8 @@ class TaskStore:
 
     _tasks: dict[str, AnalysisTask] = {}
     _lock = threading.Lock()
-    _dirty = False  # tracks whether we need to persist
+    _dirty = False
+    _migrated = False  # prevents duplicate migration
 
     def __init__(self, user_id: str):
         _init_data_dir()
@@ -179,6 +185,7 @@ class TaskStore:
         # Migration: if per-user file doesn't exist, extract from old tasks.json
         if not self._tasks_file.exists():
             self._migrate_from_old_tasks()
+            self._migrated = True
             return
 
         try:
@@ -197,33 +204,45 @@ class TaskStore:
             logger.warning("Failed to load tasks for %s: %s", self._user_id, exc)
 
     def _migrate_from_old_tasks(self) -> None:
-        """Extract this user's tasks from the old shared tasks.json."""
+        """Extract this user's tasks from the old shared tasks.json and remove them from it."""
         if not _OLD_TASKS_FILE.exists():
             logger.info("No old tasks.json found, starting fresh for user %s", self._user_id)
+            self._migrated = True
             return
 
         try:
             data = json.loads(_OLD_TASKS_FILE.read_text(encoding="utf-8"))
+            remaining = []
             migrated = []
             for d in data.get("tasks", []):
                 if d.get("user_id") == self._user_id:
                     t = self._dict_to_task(d)
                     self._tasks[t.task_id] = t
                     migrated.append(t.task_id)
+                else:
+                    remaining.append(d)
 
             if migrated:
                 self._dirty = True
                 self._save()
-                logger.info(
-                    "Migrated %d tasks for user %s to %s",
-                    len(migrated),
-                    self._user_id,
-                    self._tasks_file.name,
-                )
+                try:
+                    _OLD_TASKS_FILE.write_text(
+                        json.dumps({"version": 1, "tasks": remaining}, ensure_ascii=False, indent=2),
+                        encoding="utf-8",
+                    )
+                    logger.info(
+                        "Migrated %d tasks for user %s and cleaned old tasks.json",
+                        len(migrated),
+                        self._user_id,
+                    )
+                except Exception as exc:
+                    logger.warning("Failed to clean old tasks.json after migration: %s", exc)
             else:
                 logger.info("No tasks to migrate for user %s", self._user_id)
         except Exception as exc:
             logger.warning("Migration failed for user %s: %s", self._user_id, exc)
+        finally:
+            self._migrated = True
 
     def _save(self) -> None:
         """Persist tasks to this user's file (caller holds _lock)."""
