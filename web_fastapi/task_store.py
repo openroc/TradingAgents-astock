@@ -119,15 +119,14 @@ class AnalysisTask:
 class TaskStore:
     """Thread-safe per-user task store with JSON persistence."""
 
-    _tasks: dict[str, AnalysisTask] = {}
-    _lock = threading.Lock()
-    _dirty = False
-    _migrated = False  # prevents duplicate migration
-
     def __init__(self, user_id: str):
         _init_data_dir()
         self._user_id = user_id
         self._tasks_file = _tasks_file(user_id)
+        self._lock = threading.Lock()
+        self._tasks: dict[str, AnalysisTask] = {}
+        self._dirty = False
+        self._migrated = False  # prevents duplicate migration
         self._load()
 
     # ── Persistence ────────────────────────────────────────────────────────────
