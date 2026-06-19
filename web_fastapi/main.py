@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import date
 import sys
 import logging
 from pathlib import Path
@@ -72,7 +73,7 @@ def root(request: Request):
     token = request.cookies.get(SESSION_COOKIE)
     if not token or not _get_session(token):
         return RedirectResponse(url="/auth/login", status_code=302)
-    return templates.TemplateResponse(request, "task_form.html", {"request": request})
+    return templates.TemplateResponse(request, "task_form.html", {"request": request, "today": str(date.today())})
 
 
 # ── Health check ─────────────────────────────────────────────────────────────
