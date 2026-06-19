@@ -9,11 +9,27 @@ import uuid
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from web.progress import ProgressTracker
 
 logger = logging.getLogger(__name__)
+
+
+def _strip_lc_message(obj: Any) -> Any:
+    """Recursively convert LangChain message objects to their text content for JSON serialisation."""
+    try:
+        from langchain_core.messages import BaseMessage
+        from langchain_core.messages.base import BaseMessage as LCMBase
+    except ImportError:
+        return obj
+    if isinstance(obj, (LCMBase, BaseMessage)):
+        return obj.content or str(obj)
+    if isinstance(obj, dict):
+        return {k: _strip_lc_message(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_strip_lc_message(x) for x in obj]
+    return obj
 
 # ── Data directory ──────────────────────────────────────────────────────────────
 
@@ -147,7 +163,7 @@ class TaskStore:
             "tokens_in": task.tracker.tokens_in,
             "tokens_out": task.tracker.tokens_out,
             "completed_stages": task.tracker.completed_stages,
-            "final_state": task.final_state if hasattr(task, "final_state") else {},
+            "final_state": _strip_lc_message(task.final_state) if hasattr(task, "final_state") and task.final_state else {},
             "report_summary": task.report_summary,
             "config": task.config,
         }
@@ -268,7 +284,7 @@ class TaskStore:
             t = self._tasks[task_id]
             t.tracker.current_stage = tracker.current_stage
             t.tracker.completed_stages = list(tracker.completed_stages)
-            t.tracker.stage_reports = dict(tracker.stage_reports)
+            t.tracker.stage_reports = {k: _strip_lc_message(v) for k, v in tracker.stage_reports.items()}
             t.tracker.llm_calls = tracker.llm_calls
             t.tracker.tool_calls = tracker.tool_calls
             t.tracker.tokens_in = tracker.tokens_in
