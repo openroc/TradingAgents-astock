@@ -174,7 +174,7 @@ def download_markdown(
     signal = task.tracker.signal or ""
 
     lines = [
-        f"# TradingAgents-Astock 分析报告",
+        f"# XT投研辅助系统 分析报告",
         f"",
         f"**标的**: {task.ticker}",
         f"**日期**: {task.trade_date}",

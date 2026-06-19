@@ -1,4 +1,4 @@
-"""FastAPI application entry point — TradingAgents-Astock Web API."""
+"""FastAPI application entry point — XT投研辅助系统 Web API."""
 
 from __future__ import annotations
 
@@ -30,13 +30,13 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("TradingAgents-Astock FastAPI server started")
+    logger.info("XT投研辅助系统 FastAPI server started")
     yield
-    logger.info("TradingAgents-Astock FastAPI server shutting down")
+    logger.info("XT投研辅助系统 FastAPI server shutting down")
 
 
 app = FastAPI(
-    title="TradingAgents-Astock API",
+    title="XT投研辅助系统 API",
     description="多 Agent A 股投研框架 - 基于 LangGraph 的智能分析服务",
     version="0.2.11",
     docs_url="/docs",
@@ -78,13 +78,13 @@ def root(request: Request):
 # ── Health check ─────────────────────────────────────────────────────────────
 @app.get("/health", tags=["system"])
 def health():
-    return {"status": "ok", "service": "TradingAgents-Astock"}
+    return {"status": "ok", "service": "XT投研辅助系统"}
 
 
 if __name__ == "__main__":
     import uvicorn
 
-    parser = argparse.ArgumentParser(description="TradingAgents-Astock FastAPI Server")
+    parser = argparse.ArgumentParser(description="XT投研辅助系统 FastAPI Server")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--reload", action="store_true", default=True)
