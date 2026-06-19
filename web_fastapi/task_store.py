@@ -260,6 +260,24 @@ class TaskStore:
         except Exception as exc:
             logger.warning("Failed to persist tasks for %s: %s", self._user_id, exc)
 
+    def sync_tracker(self, task_id: str, tracker) -> None:
+        """Persist tracker state for a running task (called periodically by runner)."""
+        with self._lock:
+            if task_id not in self._tasks:
+                return
+            t = self._tasks[task_id]
+            t.tracker.current_stage = tracker.current_stage
+            t.tracker.completed_stages = list(tracker.completed_stages)
+            t.tracker.stage_reports = dict(tracker.stage_reports)
+            t.tracker.llm_calls = tracker.llm_calls
+            t.tracker.tool_calls = tracker.tool_calls
+            t.tracker.tokens_in = tracker.tokens_in
+            t.tracker.tokens_out = tracker.tokens_out
+            t.tracker.start_time = tracker.start_time
+            self._dirty = True
+        if self._dirty:
+            self._save()
+
     # ── CRUD ────────────────────────────────────────────────────────────────────
 
     def create_task(

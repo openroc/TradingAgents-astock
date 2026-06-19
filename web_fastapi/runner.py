@@ -49,6 +49,8 @@ def run_analysis(task_id: str, ticker: str, trade_date: str, config: dict) -> No
             task.tracker.update_stats(
                 s["llm_calls"], s["tool_calls"], s["tokens_in"], s["tokens_out"]
             )
+            # Persist tracker state periodically so the UI sees live updates
+            store.sync_tracker(task_id, task.tracker)
 
         signal = graph.process_signal(
             last_chunk.get("final_trade_decision", "")
