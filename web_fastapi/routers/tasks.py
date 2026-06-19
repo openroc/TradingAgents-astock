@@ -178,27 +178,12 @@ def get_task_status(
     )
 
 
-@router.delete("/{task_id}")
-def delete_task(
-    task_id: str,
-    session: Session = Depends(auth.get_current_user),
-):
-    """Delete a task."""
-    task = task_store.get_task(task_id)
-    if task is None:
-        raise HTTPException(status_code=404, detail="Task not found")
-    if task.user_id != session.user_id and not session.is_admin:
-        raise HTTPException(status_code=403, detail="Access denied")
-    task_store.delete_task(task_id)
-    return {"ok": True}
-
-
 @router.post("/{task_id}/delete")
 def delete_task_post(
     task_id: str,
     session: Session = Depends(auth.get_current_user),
 ):
-    """Delete a task (POST variant, more reliable in some browsers)."""
+    """Delete a task."""
     task = task_store.get_task(task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")

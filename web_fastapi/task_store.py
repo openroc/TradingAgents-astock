@@ -119,11 +119,18 @@ class TaskStore:
             logger.warning("Failed to load tasks from disk: %s", exc)
 
     def _save(self) -> None:
-        """Persist all tasks to disk."""
+        """Persist all tasks to disk.
+
+        Caller must hold _lock (all callers already do).
+        Keeping serialization outside the lock reduces lock hold time.
+        """
         try:
-            with self._lock:
-                tasks_list = [self._task_to_dict(t) for t in self._tasks.values()]
-            data = {"version": 1, "tasks": tasks_list}
+            tasks_list = [self._task_to_dict(t) for t in self._tasks.values()]
+        except Exception as exc:
+            logger.warning("Failed to serialise tasks: %s", exc)
+            return
+        data = {"version": 1, "tasks": tasks_list}
+        try:
             _TASKS_FILE.write_text(
                 json.dumps(data, ensure_ascii=False, indent=2),
                 encoding="utf-8",
@@ -231,11 +238,11 @@ class TaskStore:
     def delete_task(self, task_id: str) -> bool:
         """Delete a task."""
         with self._lock:
-            if task_id in self._tasks:
-                del self._tasks[task_id]
-                self._save()
-                return True
-            return False
+            if task_id not in self._tasks:
+                return False
+            del self._tasks[task_id]
+        self._save()
+        return True
 
 
 # Global singleton — loaded once per process
