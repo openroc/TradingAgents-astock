@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import secrets
 import threading
 import time
 import uuid
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
 from fastapi import HTTPException, Request, status
@@ -14,12 +16,41 @@ from fastapi import HTTPException, Request, status
 from web_fastapi.user_store import User, get_user_by_username
 
 
-# ── Session store ──────────────────────────────────────────────────────────────
+# ── Session store (persisted to disk) ─────────────────────────────────────────
 
 SESSION_EXPIRE_SECONDS = 24 * 3600  # 24 hours
-
+_DATA_DIR = Path(__file__).parent / "data"
+_SESSIONS_FILE = _DATA_DIR / "sessions.json"
 _session_store: dict[str, dict] = {}
 _session_lock = threading.Lock()
+
+
+def _init_sessions():
+    _DATA_DIR.mkdir(parents=True, exist_ok=True)
+    if _SESSIONS_FILE.exists():
+        try:
+            with open(_SESSIONS_FILE) as f:
+                raw = json.load(f)
+            now = time.time()
+            for token, data in list(raw.items()):
+                if data.get("expires_at", 0) > now:
+                    _session_store[token] = data
+            logger.info(f"Loaded {len(_session_store)} active sessions from disk")
+        except Exception as exc:
+            logger.warning(f"Could not load sessions from disk: {exc}")
+
+
+def _save_sessions():
+    try:
+        with open(_SESSIONS_FILE, "w") as f:
+            json.dump(_session_store, f)
+    except Exception as exc:
+        logger.warning(f"Could not save sessions to disk: {exc}")
+
+
+import logging
+logger = logging.getLogger(__name__)
+_init_sessions()
 
 
 @dataclass
@@ -51,6 +82,7 @@ def _create_session(user: User) -> Session:
             "is_admin": user.is_admin,
             "expires_at": session.expires_at,
         }
+        _save_sessions()
     return session
 
 
@@ -76,6 +108,7 @@ def _get_session(token: str) -> Optional[Session]:
 def _delete_session(token: str) -> None:
     with _session_lock:
         _session_store.pop(token, None)
+        _save_sessions()
 
 
 # ── Login helpers ──────────────────────────────────────────────────────────────

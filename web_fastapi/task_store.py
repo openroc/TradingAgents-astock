@@ -73,6 +73,7 @@ class TaskStore:
             "completed_stages": task.tracker.completed_stages,
             "final_state": task.final_state if hasattr(task, "final_state") else {},
             "report_summary": task.report_summary,
+            "config": task.config,
         }
 
     def _dict_to_task(self, d: dict) -> AnalysisTask:
@@ -100,6 +101,7 @@ class TaskStore:
             tracker=tracker,
             report_summary=d.get("report_summary"),
             final_state=d.get("final_state"),
+            config=d.get("config", {}),
         )
 
     def _load(self) -> None:

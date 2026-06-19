@@ -45,7 +45,10 @@ def login_page(request: Request):
 def login(req: LoginRequest):
     """Authenticate and set session cookie."""
     session = _do_login(req.username, req.password)
-    response = Response(content='{"ok": true}', media_type="application/json")
+    response = Response(
+        content=f'{{"ok": true, "token": "{session.token}"}}',
+        media_type="application/json",
+    )
     response.set_cookie(
         key=SESSION_COOKIE,
         value=session.token,

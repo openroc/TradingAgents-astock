@@ -44,64 +44,29 @@ async def view_report(
     task_id: str,
     session: Session = Depends(auth.get_current_user),
 ) -> HTMLResponse:
-    """Render the full analysis report as an HTML page, or error/running page."""
+    """Render the full report page (server-side); JS polls for running task updates."""
     task = _check_access(task_id, session)
 
-    if task.status == "error":
-        return _templates.TemplateResponse(
-            request,
-            "error_page.html",
-            {
-                "task_id": task_id,
-                "ticker": task.ticker,
-                "trade_date": task.trade_date,
-                "error": task.error or "未知错误",
-            },
-        )
-
-    if task.status != "completed":
-        return _templates.TemplateResponse(
-            request,
-            "running_page.html",
-            {
-                "task_id": task_id,
-                "ticker": task.ticker,
-                "trade_date": task.trade_date,
-                "current_stage": task.tracker.current_stage,
-                "completed_stages": task.tracker.completed_stages,
-                "stage_reports": task.tracker.stage_reports,
-                "elapsed": round(task.tracker.elapsed, 1),
-                "llm_calls": task.tracker.llm_calls,
-                "tool_calls": task.tracker.tool_calls,
-                "tokens_in": task.tracker.tokens_in,
-                "tokens_out": task.tracker.tokens_out,
-            },
-        )
-
-    # Prefer persisted final_state (survives server restart), fall back to tracker
     state = task.final_state or getattr(task.tracker, "final_state", None)
-    if not state:
-        raise HTTPException(status_code=500, detail="Report data not available")
-
     signal = task.tracker.signal or ""
 
     reports = {
-        "market_report":         _to_str(state.get("market_report")),
-        "sentiment_report":      _to_str(state.get("sentiment_report")),
-        "news_report":           _to_str(state.get("news_report")),
-        "fundamentals_report":   _to_str(state.get("fundamentals_report")),
-        "policy_report":         _to_str(state.get("policy_report")),
-        "hot_money_report":      _to_str(state.get("hot_money_report")),
-        "lockup_report":         _to_str(state.get("lockup_report")),
-        "data_quality_summary":  _to_str(state.get("data_quality_summary")),
-        "investment_plan":       _to_str(state.get("investment_plan")),
-        "trader_investment_plan": _to_str(state.get("trader_investment_plan")),
-        "final_trade_decision":  _to_str(state.get("final_trade_decision")),
+        "market_report":         _to_str(state.get("market_report")) if state else "",
+        "sentiment_report":      _to_str(state.get("sentiment_report")) if state else "",
+        "news_report":           _to_str(state.get("news_report")) if state else "",
+        "fundamentals_report":   _to_str(state.get("fundamentals_report")) if state else "",
+        "policy_report":         _to_str(state.get("policy_report")) if state else "",
+        "hot_money_report":      _to_str(state.get("hot_money_report")) if state else "",
+        "lockup_report":         _to_str(state.get("lockup_report")) if state else "",
+        "data_quality_summary":  _to_str(state.get("data_quality_summary")) if state else "",
+        "investment_plan":       _to_str(state.get("investment_plan")) if state else "",
+        "trader_investment_plan": _to_str(state.get("trader_investment_plan")) if state else "",
+        "final_trade_decision":  _to_str(state.get("final_trade_decision")) if state else "",
         "risk_judge_decision":   _to_str(
             state.get("risk_debate_state", {}).get("judge_decision", "")
             if isinstance(state.get("risk_debate_state"), dict)
             else state.get("risk_debate_state", "")
-        ),
+        ) if state else "",
     }
 
     return _templates.TemplateResponse(
@@ -111,6 +76,8 @@ async def view_report(
             "task_id": task_id,
             "ticker": task.ticker,
             "trade_date": task.trade_date,
+            "status": task.status,
+            "error": task.error,
             "signal": signal,
             "reports": reports,
             "elapsed": round(task.tracker.elapsed, 1),
@@ -120,6 +87,74 @@ async def view_report(
             "tokens_out": task.tracker.tokens_out,
         },
     )
+
+
+@router.get("/{task_id}/data")
+def report_data(
+    task_id: str,
+    session: Session = Depends(auth.get_current_user),
+):
+    """Return task status and report content as JSON (used by AJAX polling)."""
+    task = _check_access(task_id, session)
+
+    if task.status == "error":
+        return {
+            "status": "error",
+            "ticker": task.ticker,
+            "trade_date": task.trade_date,
+            "error": task.error or "未知错误",
+        }
+
+    if task.status != "completed":
+        return {
+            "status": task.status,
+            "ticker": task.ticker,
+            "trade_date": task.trade_date,
+            "error": task.error if task.status == "error" else None,
+            "current_stage": task.tracker.current_stage,
+            "completed_stages": task.tracker.completed_stages,
+            "elapsed": round(task.tracker.elapsed, 1),
+            "llm_calls": task.tracker.llm_calls,
+            "tool_calls": task.tracker.tool_calls,
+            "tokens_in": task.tracker.tokens_in,
+            "tokens_out": task.tracker.tokens_out,
+        }
+
+    state = task.final_state or getattr(task.tracker, "final_state", None)
+    if not state:
+        raise HTTPException(status_code=500, detail="Report data not available")
+
+    signal = task.tracker.signal or ""
+
+    return {
+        "status": "completed",
+        "ticker": task.ticker,
+        "trade_date": task.trade_date,
+        "signal": signal,
+        "elapsed": round(task.tracker.elapsed, 1),
+        "llm_calls": task.tracker.llm_calls,
+        "tool_calls": task.tracker.tool_calls,
+        "tokens_in": task.tracker.tokens_in,
+        "tokens_out": task.tracker.tokens_out,
+        "reports": {
+            "market_report":        _to_str(state.get("market_report")),
+            "sentiment_report":     _to_str(state.get("sentiment_report")),
+            "news_report":          _to_str(state.get("news_report")),
+            "fundamentals_report":  _to_str(state.get("fundamentals_report")),
+            "policy_report":        _to_str(state.get("policy_report")),
+            "hot_money_report":     _to_str(state.get("hot_money_report")),
+            "lockup_report":        _to_str(state.get("lockup_report")),
+            "data_quality_summary": _to_str(state.get("data_quality_summary")),
+            "investment_plan":      _to_str(state.get("investment_plan")),
+            "trader_investment_plan": _to_str(state.get("trader_investment_plan")),
+            "final_trade_decision": _to_str(state.get("final_trade_decision")),
+            "risk_judge_decision": _to_str(
+                state.get("risk_debate_state", {}).get("judge_decision", "")
+                if isinstance(state.get("risk_debate_state"), dict)
+                else state.get("risk_debate_state", "")
+            ),
+        },
+    }
 
 
 @router.get("/{task_id}/markdown")

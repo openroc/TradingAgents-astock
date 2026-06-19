@@ -45,7 +45,7 @@ let currentPage = 1;
 
 async function loadTasks(page = 1) {
   try {
-    const resp = await fetch(`/tasks/list?page=${page}&page_size=20`);
+    const resp = await fetch(`/tasks/list?page=${page}&page_size=20`, { credentials: 'include' });
     if (!resp.ok) {
       document.getElementById('tasks-body').innerHTML =
         `<tr><td colspan="7" class="px-4 py-8 text-center text-red-400">HTTP ${resp.status}</td></tr>`;

@@ -38,7 +38,7 @@ def _running_count(user_id: str) -> int:
 
 # ── Page routes (no auth on template rendering) ──────────────────────────────────
 
-@router.get("/", include_in_schema=False)
+@router.get("", include_in_schema=False)
 def tasks_page(request: Request):
     return _templates.TemplateResponse(request, "tasks_list.html", {"request": request})
 
@@ -87,7 +87,7 @@ class TaskStatusResponse(BaseModel):
     report_url: Optional[str] = None
 
 
-@router.post("/", response_model=CreateTaskResponse, status_code=201)
+@router.post("", response_model=CreateTaskResponse, status_code=201)
 def create_task(
     req: CreateTaskRequest,
     session: Session = Depends(auth.get_current_user),
@@ -178,7 +178,7 @@ def get_task_status(
     )
 
 
-@router.delete("/{task_id}", status_code=204)
+@router.delete("/{task_id}")
 def delete_task(
     task_id: str,
     session: Session = Depends(auth.get_current_user),
@@ -190,3 +190,65 @@ def delete_task(
     if task.user_id != session.user_id and not session.is_admin:
         raise HTTPException(status_code=403, detail="Access denied")
     task_store.delete_task(task_id)
+    return {"ok": True}
+
+
+@router.post("/{task_id}/delete")
+def delete_task_post(
+    task_id: str,
+    session: Session = Depends(auth.get_current_user),
+):
+    """Delete a task (POST variant, more reliable in some browsers)."""
+    task = task_store.get_task(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task.user_id != session.user_id and not session.is_admin:
+        raise HTTPException(status_code=403, detail="Access denied")
+    task_store.delete_task(task_id)
+    return {"ok": True}
+
+
+@router.post("/{task_id}/rerun")
+def rerun_task(
+    task_id: str,
+    session: Session = Depends(auth.get_current_user),
+):
+    """Delete the old task and start a new one with the same parameters."""
+    old_task = task_store.get_task(task_id)
+    if old_task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if old_task.user_id != session.user_id and not session.is_admin:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    user = get_user_by_id(session.user_id)
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    # Save config before deleting
+    if old_task.config:
+        config = old_task.config
+    else:
+        config = build_config(
+            llm_provider=user.default_provider,
+            deep_think_llm=user.default_model,
+            quick_think_llm=user.default_model,
+        )
+
+    # Delete old task first (in case its status is stuck on "running")
+    task_store.delete_task(task_id)
+
+    # Now check concurrency (old task no longer counted)
+    if _running_count(session.user_id) >= user.max_concurrency:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many concurrent tasks (max: {user.max_concurrency})",
+        )
+    new_id = task_store.create_task(
+        session.user_id,
+        old_task.ticker,
+        old_task.trade_date,
+        config,
+    )
+    start_analysis(new_id, old_task.ticker, old_task.trade_date, config)
+
+    return {"task_id": new_id, "ticker": old_task.ticker, "status": "pending"}

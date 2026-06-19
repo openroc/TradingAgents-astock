@@ -54,13 +54,9 @@ form.addEventListener('submit', async (e) => {
     });
 
     if (resp.ok) {
-      // Fetch me to confirm auth, then redirect
-      const meResp = await fetch('/auth/me', { credentials: 'include' });
-      if (meResp.ok) {
-        window.location.href = '/';
-      } else {
-        window.location.href = '/auth/login';
-      }
+      const data = await resp.json();
+      if (data.token) localStorage.setItem('session_token', data.token);
+      window.location.href = '/';
     } else {
       const err = await resp.json().catch(() => ({ detail: 'Login failed' }));
       errorMsg.textContent = err.detail || '登录失败';

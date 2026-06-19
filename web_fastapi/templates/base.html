@@ -24,31 +24,74 @@
       <a href="/" class="text-lg font-bold text-emerald-400 tracking-tight">
         📈 TradingAgents-Astock
       </a>
-      <div class="flex items-center gap-6 text-sm text-gray-400">
+
+      {# Desktop nav #}
+      <div id="nav-desktop" class="hidden sm:flex items-center gap-6 text-sm text-gray-400">
         <a href="/" class="hover:text-emerald-400 transition">发起分析</a>
         <a href="/tasks" class="hover:text-emerald-400 transition">任务列表</a>
-        <span id="nav-user" class="hidden items-center gap-3">
+        <span id="nav-user-desktop" class="hidden items-center gap-3">
           <a href="/auth/change-password" class="hover:text-yellow-400 transition">修改密码</a>
           <span id="nav-username" class="text-emerald-400 font-medium"></span>
           <span class="text-gray-600 mx-1">·</span>
           <a href="#" id="nav-logout" class="hover:text-red-400 transition">退出</a>
         </span>
       </div>
+
+      {# Mobile hamburger #}
+      <button id="nav-toggle" class="sm:hidden text-gray-400 hover:text-white p-1">
+        <svg id="icon-menu" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+        </svg>
+        <svg id="icon-close" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+
+    {# Mobile menu #}
+    <div id="nav-mobile" class="hidden sm:hidden px-4 pb-4 flex flex-col gap-3 text-sm text-gray-400 border-t border-gray-800 pt-3">
+      <a href="/" class="hover:text-emerald-400 transition">发起分析</a>
+      <a href="/tasks" class="hover:text-emerald-400 transition">任务列表</a>
+      <span id="nav-user-mobile" class="hidden flex-col gap-3">
+        <a href="/auth/change-password" class="hover:text-yellow-400 transition">修改密码</a>
+        <span id="nav-username-mobile" class="text-emerald-400 font-medium"></span>
+        <a href="#" id="nav-logout-mobile" class="hover:text-red-400 transition">退出</a>
+      </span>
     </div>
   </nav>
   <script>
+    // Mobile nav toggle
+    const toggle = document.getElementById('nav-toggle');
+    const mobileMenu = document.getElementById('nav-mobile');
+    const iconMenu = document.getElementById('icon-menu');
+    const iconClose = document.getElementById('icon-close');
+    toggle?.addEventListener('click', () => {
+      mobileMenu.classList.toggle('hidden');
+      iconMenu.classList.toggle('hidden');
+      iconClose.classList.toggle('hidden');
+    });
+
     // Fetch current user and update nav
     fetch('/auth/me', { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
       .then(user => {
         if (user) {
           document.getElementById('nav-username').textContent = user.username;
-          document.getElementById('nav-user').classList.remove('hidden');
+          document.getElementById('nav-username-mobile').textContent = user.username;
+          document.getElementById('nav-user-desktop').classList.remove('hidden');
+          document.getElementById('nav-user-desktop').classList.add('flex');
+          document.getElementById('nav-user-mobile').classList.remove('hidden');
+          document.getElementById('nav-user-mobile').classList.add('flex');
           document.getElementById('nav-logout').onclick = async (e) => {
             e.preventDefault();
             await fetch('/auth/logout', { method: 'POST', credentials: 'include' });
             window.location.href = '/auth/login';
           };
+          document.getElementById('nav-logout-mobile')?.addEventListener('click', async (e) => {
+            e.preventDefault();
+            await fetch('/auth/logout', { method: 'POST', credentials: 'include' });
+            window.location.href = '/auth/login';
+          });
         }
       }).catch(() => {});
   </script>
