@@ -1,4 +1,4 @@
-"""Thread-safe in-memory task store with disk persistence for multi-user multi-task analysis."""
+"""Per-user task store — one tasks_{user_id}.json per user, no cross-process lock needed."""
 
 from __future__ import annotations
 
@@ -9,20 +9,41 @@ import uuid
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from web.progress import ProgressTracker
 
 logger = logging.getLogger(__name__)
 
-# Persist data directory relative to this file
+# ── Data directory ──────────────────────────────────────────────────────────────
+
 _DATA_DIR = Path(__file__).parent / "data"
-_TASKS_FILE = _DATA_DIR / "tasks.json"
+_OLD_TASKS_FILE = _DATA_DIR / "tasks.json"
 
 
 def _init_data_dir():
     _DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+
+# ── Per-user store cache ───────────────────────────────────────────────────────
+
+_store_cache: dict[str, TaskStore] = {}
+_cache_lock = threading.Lock()
+
+
+def _tasks_file(user_id: str) -> Path:
+    return _DATA_DIR / f"tasks_{user_id}.json"
+
+
+def get_store(user_id: str) -> TaskStore:
+    """Get or create the TaskStore for a given user (cached per process)."""
+    with _cache_lock:
+        if user_id not in _store_cache:
+            _store_cache[user_id] = TaskStore(user_id)
+        return _store_cache[user_id]
+
+
+# ── Task model ──────────────────────────────────────────────────────────────────
 
 @dataclass
 class AnalysisTask:
@@ -32,7 +53,7 @@ class AnalysisTask:
     user_id: str
     ticker: str
     trade_date: str
-    status: str = "pending"  # "pending" | "running" | "completed" | "error"
+    status: str = "pending"  # "pending" | "running" | "completed" | "error" | "abort"
     error: Optional[str] = None
     tracker: ProgressTracker = field(default_factory=ProgressTracker)
     created_at: float = field(default_factory=time.time)
@@ -41,21 +62,24 @@ class AnalysisTask:
     final_state: Optional[dict] = None
 
 
+# ── TaskStore ───────────────────────────────────────────────────────────────────
+
 class TaskStore:
-    """Thread-safe store with JSON persistence. Loads from disk on init."""
+    """Thread-safe per-user task store with JSON persistence."""
 
     _tasks: dict[str, AnalysisTask] = {}
     _lock = threading.Lock()
+    _dirty = False  # tracks whether we need to persist
 
-    def __init__(self):
+    def __init__(self, user_id: str):
         _init_data_dir()
+        self._user_id = user_id
+        self._tasks_file = _tasks_file(user_id)
         self._load()
 
     # ── Persistence ────────────────────────────────────────────────────────────
 
     def _task_to_dict(self, task: AnalysisTask) -> dict:
-        """Serialize task to a JSON-safe dict."""
-        # Avoid serialising the ProgressTracker directly; store its fields
         return {
             "task_id": task.task_id,
             "user_id": task.user_id,
@@ -77,7 +101,6 @@ class TaskStore:
         }
 
     def _dict_to_task(self, d: dict) -> AnalysisTask:
-        """Reconstruct a task from a persisted dict."""
         tracker = ProgressTracker(
             ticker=d["ticker"],
             trade_date=d["trade_date"],
@@ -105,40 +128,74 @@ class TaskStore:
         )
 
     def _load(self) -> None:
-        """Load persisted tasks from disk."""
-        if not _TASKS_FILE.exists():
+        """Load tasks for this user, migrating from old tasks.json if needed."""
+        # Migration: if per-user file doesn't exist, extract from old tasks.json
+        if not self._tasks_file.exists():
+            self._migrate_from_old_tasks()
             return
+
         try:
-            data = json.loads(_TASKS_FILE.read_text(encoding="utf-8"))
+            data = json.loads(self._tasks_file.read_text(encoding="utf-8"))
             with self._lock:
                 for d in data.get("tasks", []):
                     t = self._dict_to_task(d)
                     self._tasks[t.task_id] = t
-            logger.info("Loaded %d persisted tasks", len(self._tasks))
+            logger.info(
+                "Loaded %d tasks for user %s from %s",
+                len(self._tasks),
+                self._user_id,
+                self._tasks_file.name,
+            )
         except Exception as exc:
-            logger.warning("Failed to load tasks from disk: %s", exc)
+            logger.warning("Failed to load tasks for %s: %s", self._user_id, exc)
+
+    def _migrate_from_old_tasks(self) -> None:
+        """Extract this user's tasks from the old shared tasks.json."""
+        if not _OLD_TASKS_FILE.exists():
+            logger.info("No old tasks.json found, starting fresh for user %s", self._user_id)
+            return
+
+        try:
+            data = json.loads(_OLD_TASKS_FILE.read_text(encoding="utf-8"))
+            migrated = []
+            for d in data.get("tasks", []):
+                if d.get("user_id") == self._user_id:
+                    t = self._dict_to_task(d)
+                    self._tasks[t.task_id] = t
+                    migrated.append(t.task_id)
+
+            if migrated:
+                self._dirty = True
+                self._save()
+                logger.info(
+                    "Migrated %d tasks for user %s to %s",
+                    len(migrated),
+                    self._user_id,
+                    self._tasks_file.name,
+                )
+            else:
+                logger.info("No tasks to migrate for user %s", self._user_id)
+        except Exception as exc:
+            logger.warning("Migration failed for user %s: %s", self._user_id, exc)
 
     def _save(self) -> None:
-        """Persist all tasks to disk.
-
-        Caller must hold _lock (all callers already do).
-        Keeping serialization outside the lock reduces lock hold time.
-        """
+        """Persist tasks to this user's file (caller holds _lock)."""
         try:
             tasks_list = [self._task_to_dict(t) for t in self._tasks.values()]
         except Exception as exc:
-            logger.warning("Failed to serialise tasks: %s", exc)
+            logger.warning("Failed to serialise tasks for %s: %s", self._user_id, exc)
             return
         data = {"version": 1, "tasks": tasks_list}
         try:
-            _TASKS_FILE.write_text(
+            self._tasks_file.write_text(
                 json.dumps(data, ensure_ascii=False, indent=2),
                 encoding="utf-8",
             )
+            self._dirty = False
         except Exception as exc:
-            logger.warning("Failed to persist tasks: %s", exc)
+            logger.warning("Failed to persist tasks for %s: %s", self._user_id, exc)
 
-    # ── CRUD ──────────────────────────────────────────────────────────────────
+    # ── CRUD ────────────────────────────────────────────────────────────────────
 
     def create_task(
         self,
@@ -160,6 +217,7 @@ class TaskStore:
         )
         with self._lock:
             self._tasks[task_id] = task
+            self._dirty = True
         self._save()
         return task_id
 
@@ -179,7 +237,9 @@ class TaskStore:
             if task_id in self._tasks:
                 self._tasks[task_id].status = status
                 self._tasks[task_id].error = error
-        self._save()
+                self._dirty = True
+        if self._dirty:
+            self._save()
 
     def update_completed(
         self,
@@ -196,23 +256,18 @@ class TaskStore:
                 task.tracker = tracker
                 task.report_summary = report_summary
                 task.final_state = final_state
-        self._save()
+                self._dirty = True
+        if self._dirty:
+            self._save()
 
-    def list_tasks(
-        self,
-        user_id: Optional[str] = None,
-        page: int = 1,
-        page_size: int = 20,
-    ) -> dict:
-        """List tasks for a specific user, with pagination."""
+    def list_tasks(self, page: int = 1, page_size: int = 20) -> dict:
+        """List tasks for this user, with pagination."""
         with self._lock:
             tasks = sorted(
                 self._tasks.values(),
                 key=lambda t: t.created_at,
                 reverse=True,
             )
-        if user_id:
-            tasks = [t for t in tasks if t.user_id == user_id]
         total = len(tasks)
         start = (page - 1) * page_size
         end = start + page_size
@@ -224,6 +279,7 @@ class TaskStore:
                 "ticker": t.ticker,
                 "trade_date": t.trade_date,
                 "status": t.status,
+                "error": t.error,
                 "signal": t.tracker.signal,
                 "created_at": t.created_at,
                 "elapsed": t.tracker.elapsed,
@@ -241,9 +297,22 @@ class TaskStore:
             if task_id not in self._tasks:
                 return False
             del self._tasks[task_id]
+            self._dirty = True
         self._save()
         return True
 
+    def abort_task(self, task_id: str, reason: str = "任务被手动终止") -> bool:
+        """Mark a running task as aborted."""
+        with self._lock:
+            if task_id not in self._tasks:
+                return False
+            self._tasks[task_id].status = "abort"
+            self._tasks[task_id].error = reason
+            self._dirty = True
+        self._save()
+        return True
 
-# Global singleton — loaded once per process
-task_store = TaskStore()
+    def count_running(self) -> int:
+        """Count running tasks for this user."""
+        with self._lock:
+            return sum(1 for t in self._tasks.values() if t.status == "running")

@@ -12,7 +12,7 @@ from starlette.requests import Request as StarletteRequest
 from pydantic import BaseModel, Field
 from pathlib import Path
 
-from web_fastapi.task_store import task_store
+from web_fastapi.task_store import get_store
 from web_fastapi.runner import start_analysis
 from web_fastapi.config import build_config
 from web_fastapi import auth
@@ -25,15 +25,6 @@ _templates = Jinja2Templates(
 )
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
-
-
-def _running_count(user_id: str) -> int:
-    """Count tasks currently running for this user."""
-    count = 0
-    for t in task_store._tasks.values():  # noqa: SLF001
-        if t.user_id == user_id and t.status == "running":
-            count += 1
-    return count
 
 
 # ── Page routes (no auth on template rendering) ──────────────────────────────────
@@ -97,8 +88,10 @@ def create_task(
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")
 
+    store = get_store(session.user_id)
+
     # Concurrency check
-    if _running_count(session.user_id) >= user.max_concurrency:
+    if store.count_running() >= user.max_concurrency:
         raise HTTPException(
             status_code=429,
             detail=f"Too many concurrent tasks (max: {user.max_concurrency})",
@@ -122,7 +115,7 @@ def create_task(
         data_vendors=req.data_vendors,
     )
 
-    task_id = task_store.create_task(session.user_id, req.ticker, trade_date, config)
+    task_id = store.create_task(session.user_id, req.ticker, trade_date, config)
     start_analysis(task_id, req.ticker, trade_date, config)
 
     return CreateTaskResponse(
@@ -141,7 +134,7 @@ def list_tasks(
     session: Session = Depends(auth.get_current_user),
 ) -> dict:
     """List tasks for the current user."""
-    return task_store.list_tasks(user_id=session.user_id, page=page, page_size=page_size)
+    return get_store(session.user_id).list_tasks(page=page, page_size=page_size)
 
 
 @router.get("/{task_id}", response_model=TaskStatusResponse)
@@ -150,7 +143,7 @@ def get_task_status(
     session: Session = Depends(auth.get_current_user),
 ) -> TaskStatusResponse:
     """Poll the current status of an analysis task."""
-    task = task_store.get_task(task_id)
+    task = get_store(session.user_id).get_task(task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
     if task.user_id != session.user_id and not session.is_admin:
@@ -180,16 +173,23 @@ def get_task_status(
 
 @router.post("/{task_id}/delete")
 def delete_task_post(
+    request: Request,
     task_id: str,
     session: Session = Depends(auth.get_current_user),
 ):
-    """Delete a task."""
-    task = task_store.get_task(task_id)
+    """Delete a task. Form submit redirects to /tasks; AJAX returns JSON."""
+    store = get_store(session.user_id)
+    task = store.get_task(task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
     if task.user_id != session.user_id and not session.is_admin:
         raise HTTPException(status_code=403, detail="Access denied")
-    task_store.delete_task(task_id)
+    store.delete_task(task_id)
+
+    ct = request.headers.get("content-type", "")
+    if "application/json" not in ct:
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/tasks", status_code=302)
     return {"ok": True}
 
 
@@ -199,7 +199,8 @@ def rerun_task(
     session: Session = Depends(auth.get_current_user),
 ):
     """Delete the old task and start a new one with the same parameters."""
-    old_task = task_store.get_task(task_id)
+    store = get_store(session.user_id)
+    old_task = store.get_task(task_id)
     if old_task is None:
         raise HTTPException(status_code=404, detail="Task not found")
     if old_task.user_id != session.user_id and not session.is_admin:
@@ -220,15 +221,16 @@ def rerun_task(
         )
 
     # Delete old task first (in case its status is stuck on "running")
-    task_store.delete_task(task_id)
+    store.delete_task(task_id)
 
     # Now check concurrency (old task no longer counted)
-    if _running_count(session.user_id) >= user.max_concurrency:
+    if store.count_running() >= user.max_concurrency:
         raise HTTPException(
             status_code=429,
             detail=f"Too many concurrent tasks (max: {user.max_concurrency})",
         )
-    new_id = task_store.create_task(
+
+    new_id = store.create_task(
         session.user_id,
         old_task.ticker,
         old_task.trade_date,
@@ -237,3 +239,19 @@ def rerun_task(
     start_analysis(new_id, old_task.ticker, old_task.trade_date, config)
 
     return {"task_id": new_id, "ticker": old_task.ticker, "status": "pending"}
+
+
+@router.post("/{task_id}/abort")
+def abort_task(
+    task_id: str,
+    session: Session = Depends(auth.get_current_user),
+):
+    """Mark a stuck running task as aborted (e.g. process was killed)."""
+    store = get_store(session.user_id)
+    task = store.get_task(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task.user_id != session.user_id and not session.is_admin:
+        raise HTTPException(status_code=403, detail="Access denied")
+    store.abort_task(task_id, "任务被手动终止")
+    return {"ok": True}

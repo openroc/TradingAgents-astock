@@ -75,18 +75,20 @@ function renderTasks(data) {
   tbody.innerHTML = data.items.map(task => {
     const statusColor = task.status === 'completed' ? 'bg-green-900 text-green-400'
       : task.status === 'running' ? 'bg-yellow-900 text-yellow-400'
+      : task.status === 'abort' ? 'bg-orange-900 text-orange-400'
       : task.status === 'error' ? 'bg-red-900 text-red-400' : 'bg-gray-700 text-gray-400';
     const action = task.status === 'completed'
       ? `<a href="/report/${task.task_id}" class="text-emerald-400 hover:underline">查看报告</a>`
-      : task.status === 'running'
-      ? `<a href="/report/${task.task_id}" class="text-yellow-400 hover:underline">查看进度</a>`
+      : (task.status === 'running' || task.status === 'abort')
+      ? `<a href="/report/${task.task_id}" class="text-yellow-400 hover:underline">查看</a>`
       : `<span class="text-gray-500">-</span>`;
     const elapsed = task.elapsed > 0 ? `${task.elapsed.toFixed(1)}s` : '-';
+    const statusLabel = task.status === 'abort' ? '已终止' : task.status;
     return `<tr class="hover:bg-gray-800/50">
       <td class="px-4 py-3 font-mono text-emerald-400">${task.task_id}</td>
       <td class="px-4 py-3 font-medium">${task.ticker}</td>
       <td class="px-4 py-3 text-gray-400">${task.trade_date}</td>
-      <td class="px-4 py-3"><span class="px-2 py-0.5 rounded text-xs ${statusColor}">${task.status}</span></td>
+      <td class="px-4 py-3"><span class="px-2 py-0.5 rounded text-xs ${statusColor}">${statusLabel}</span></td>
       <td class="px-4 py-3 text-sm">${task.signal || '-'}</td>
       <td class="px-4 py-3 text-gray-400">${elapsed}</td>
       <td class="px-4 py-3">${action}</td>

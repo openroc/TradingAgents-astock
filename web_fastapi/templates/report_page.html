@@ -167,15 +167,7 @@
   </div>
 </div>
 
-{# ── Hidden delete form (form submit avoids all fetch/CORS edge cases) ── #}
-<form id="delete-form" action="/tasks/{{ task_id }}/delete" method="POST" style="display:none">
-  <input type="hidden" name="session_token" value="">
-</form>
-<script>
-  // Inject session cookie value into hidden field so form POST carries auth
-  document.querySelector('#delete-form input[name="session_token"]').value =
-    document.cookie.match(/session_token=([^;]+)/)?.[1] || '';
-</script>
+<form id="delete-form" action="/tasks/{{ task_id }}/delete" method="POST" style="display:none"></form>
 {% endblock %}
 
 {% block scripts %}
@@ -222,7 +214,7 @@ document.querySelectorAll('.report-raw').forEach(el => {
 // ── Update running panel ─────────────────────────────────────────────────
 function updateRunningPanel(data) {
   const panel = document.getElementById('running-panel');
-  if (data.status === 'completed' || data.status === 'error') {
+  if (data.status === 'completed' || data.status === 'error' || data.status === 'abort') {
     panel.classList.add('hidden');
     return;
   }
@@ -298,10 +290,10 @@ async function poll() {
       updateReportContent(data);
       document.getElementById('running-panel').classList.add('hidden');
       document.getElementById('error-panel').classList.add('hidden');
-    } else if (data.status === 'error') {
+    } else if (data.status === 'error' || data.status === 'abort') {
       document.getElementById('running-panel').classList.add('hidden');
       document.getElementById('error-panel').classList.remove('hidden');
-      document.getElementById('err-message').textContent = data.error || '未知错误';
+      document.getElementById('err-message').textContent = data.error || (data.status === 'abort' ? '任务已被终止' : '未知错误');
     } else {
       document.getElementById('error-panel').classList.add('hidden');
       updateRunningPanel(data);
@@ -365,6 +357,10 @@ document.getElementById('btn-rerun-error')?.addEventListener('click', async func
 // If initially error, show error panel; if running/pending, show running panel
 if (INIT_STATUS === 'error') {
   document.getElementById('error-panel').classList.remove('hidden');
+} else if (INIT_STATUS === 'abort') {
+  document.getElementById('running-panel').classList.add('hidden');
+  document.getElementById('error-panel').classList.remove('hidden');
+  document.getElementById('err-message').textContent = '任务已被终止';
 } else if (INIT_STATUS === 'pending' || INIT_STATUS === 'running') {
   document.getElementById('running-panel').classList.remove('hidden');
   poll();

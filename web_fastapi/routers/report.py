@@ -8,7 +8,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
 from pathlib import Path
 
-from web_fastapi.task_store import task_store
+from web_fastapi.task_store import get_store
 from web_fastapi import auth
 from web_fastapi.auth import Session
 
@@ -22,7 +22,7 @@ router = APIRouter(prefix="/report", tags=["report"])
 
 def _check_access(task_id: str, session) -> object:
     """Verify the session has access to the task. Returns the task."""
-    task = task_store.get_task(task_id)
+    task = get_store(session.user_id).get_task(task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
     if task.user_id != session.user_id and not session.is_admin:
