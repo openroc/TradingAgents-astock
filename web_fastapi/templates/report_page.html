@@ -15,58 +15,52 @@
 
 {% block content %}
 
-{# ── Header ── #}
-<div class="flex flex-wrap items-center justify-between gap-4 mb-6">
-  <div>
-    <h1 class="text-3xl font-bold">
+{# ── Header + Stats in one compact row ── #}
+<div class="flex flex-wrap items-start gap-4 mb-4">
+  <div class="flex-1 min-w-0">
+    <h1 class="text-2xl font-bold leading-tight">
       <span id="hdr-ticker" class="text-emerald-400">{{ ticker }}</span>
-      <span id="hdr-date" class="text-gray-500 text-xl ml-2">{{ trade_date }}</span>
+      <span id="hdr-date" class="text-gray-500 text-lg ml-2">{{ trade_date }}</span>
     </h1>
-    <p class="text-gray-400 text-sm mt-1">多 Agent 研判 · <span id="hdr-elapsed">{{ elapsed }}s</span></p>
+    <p class="text-gray-400 text-xs mt-0.5">
+      <span id="hdr-elapsed">{{ elapsed }}s</span> · 多 Agent 研判
+      <span id="hdr-signal-badge"></span>
+    </p>
   </div>
 
-  <div class="flex items-center gap-3">
-    <span id="hdr-signal-badge" class="text-lg font-bold px-4 py-2 rounded-xl
-      {% if 'BUY' in signal.upper() %}bg-green-900 text-green-400
-      {% elif 'SELL' in signal.upper() %}bg-red-900 text-red-400
-      {% else %}bg-yellow-900 text-yellow-400{% endif %}">
-      {{ signal }}
-    </span>
+  {# ── Compact Stats ── #}
+  <div class="flex flex-wrap gap-2 items-center">
+    <div class="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-center min-w-[72px]">
+      <div id="stat-llm" class="text-lg font-bold text-emerald-400">{{ llm_calls }}</div>
+      <div class="text-xs text-gray-500">LLM</div>
+    </div>
+    <div class="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-center min-w-[72px]">
+      <div id="stat-tools" class="text-lg font-bold text-blue-400">{{ tool_calls }}</div>
+      <div class="text-xs text-gray-500">工具</div>
+    </div>
+    <div class="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-center min-w-[80px]">
+      <div id="stat-tokens-in" class="text-lg font-bold text-purple-400">{{ tokens_in }}</div>
+      <div class="text-xs text-gray-500">Token↑</div>
+    </div>
+    <div class="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-center min-w-[80px]">
+      <div id="stat-tokens-out" class="text-lg font-bold text-orange-400">{{ tokens_out }}</div>
+      <div class="text-xs text-gray-500">Token↓</div>
+    </div>
+    <div class="bg-gray-900 border border-yellow-700/40 rounded-lg px-3 py-2 text-center min-w-[88px]">
+      <div id="stat-cost" class="text-lg font-bold text-yellow-400">{% if task_cost and task_cost > 0 %}{{ '%.2f'|format(task_cost) }}{% else %}-{% endif %}</div>
+      <div class="text-xs text-gray-500">¥费用</div>
+    </div>
     {% if status == 'completed' %}
-    <a href="/report/{{ task_id }}/markdown" class="hidden md:block text-sm bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg transition">📄 MD</a>
-    <a href="/report/{{ task_id }}/pdf" class="md:hidden text-sm bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg transition">📕 PDF</a>
+    <a href="/report/{{ task_id }}/markdown" class="text-sm bg-gray-800 hover:bg-gray-700 px-3 py-2 rounded-lg transition">📄 MD</a>
+    <a href="/report/{{ task_id }}/pdf" class="text-sm bg-gray-800 hover:bg-gray-700 px-3 py-2 rounded-lg transition">📕 PDF</a>
     <button type="button" onclick="if(confirm('确定删除此任务？删除后可重新发起。'))document.getElementById('delete-form').submit()"
-            class="text-sm bg-gray-800 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition cursor-pointer">🗑 删除</button>
+            class="text-sm bg-gray-800 hover:bg-red-700 text-white px-3 py-2 rounded-lg transition cursor-pointer">🗑</button>
     {% endif %}
   </div>
 </div>
 
-{# ── Stats bar ── #}
-<div class="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 mb-8">
-  <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
-    <div id="stat-llm" class="text-2xl font-bold text-emerald-400">{{ llm_calls }}</div>
-    <div class="text-xs text-gray-500 mt-1">LLM 调用</div>
-  </div>
-  <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
-    <div id="stat-tools" class="text-2xl font-bold text-blue-400">{{ tool_calls }}</div>
-    <div class="text-xs text-gray-500 mt-1">工具调用</div>
-  </div>
-  <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
-    <div id="stat-tokens-in" class="text-2xl font-bold text-purple-400">{{ tokens_in }}</div>
-    <div class="text-xs text-gray-500 mt-1">输入 Token ↑</div>
-  </div>
-  <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
-    <div id="stat-tokens-out" class="text-2xl font-bold text-orange-400">{{ tokens_out }}</div>
-    <div class="text-xs text-gray-500 mt-1">输出 Token ↓</div>
-  </div>
-  <div class="bg-gray-900 border border-yellow-700/40 rounded-xl p-4 text-center">
-    <div id="stat-cost" class="text-2xl font-bold text-yellow-400">{% if task_cost and task_cost > 0 %}¥ {{ '%.4f'|format(task_cost) }}{% else %}-{% endif %}</div>
-    <div class="text-xs text-gray-500 mt-1">💰 本次费用{% if model_name %} <span class="text-gray-600">{{ model_name }}</span>{% endif %}</div>
-  </div>
-</div>
-
 {# ── Running overlay (shown while task is pending/running) ── #}
-<div id="running-panel" class="hidden bg-yellow-900/20 border border-yellow-800 rounded-xl p-6 mb-6">
+<div id="running-panel" class="hidden bg-yellow-900/20 border border-yellow-800 rounded-xl p-4 mb-4">
   <div class="flex items-center gap-4 mb-3">
     <span class="text-2xl">⏳</span>
     <div>
@@ -94,7 +88,7 @@
 </div>
 
 {# ── Error panel (task failed) ── #}
-<div id="error-panel" class="hidden bg-red-900/20 border border-red-800 rounded-xl p-6 mb-6">
+<div id="error-panel" class="hidden bg-red-900/20 border border-red-800 rounded-xl p-4 mb-4">
   <div class="flex items-center gap-4 mb-3">
     <span class="text-2xl">⚠️</span>
     <div>
@@ -113,64 +107,39 @@
   </div>
 </div>
 
-<div class="flex gap-6">
-
-  {# ── Sidebar ── #}
-  <aside class="hidden md:block w-56 shrink-0">
-    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 sticky top-20">
-      <h3 class="text-sm font-semibold text-gray-400 mb-3">报告章节</h3>
-      <nav class="space-y-1" id="section-nav">
-        <a href="#tab-market" class="block text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition nav-link" data-tab="tab-market">📊 技术分析</a>
-        <a href="#tab-sentiment" class="block text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition nav-link" data-tab="tab-sentiment">💬 市场情绪</a>
-        <a href="#tab-news" class="block text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition nav-link" data-tab="tab-news">📰 新闻舆情</a>
-        <a href="#tab-fundamentals" class="block text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition nav-link" data-tab="tab-fundamentals">📋 基本面</a>
-        <a href="#tab-policy" class="block text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition nav-link" data-tab="tab-policy">🏛️ 政策分析</a>
-        <a href="#tab-hot-money" class="block text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition nav-link" data-tab="tab-hot-money">🔥 游资追踪</a>
-        <a href="#tab-lockup" class="block text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition nav-link" data-tab="tab-lockup">🔒 解禁监控</a>
-        <hr class="border-gray-700 my-2">
-        <a href="#tab-quality" class="block text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition nav-link" data-tab="tab-quality">✅ 质量门控</a>
-        <a href="#tab-debate" class="block text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition nav-link" data-tab="tab-debate">⚔️ 多空辩论</a>
-        <a href="#tab-trader" class="block text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition nav-link" data-tab="tab-trader">💹 交易方案</a>
-        <a href="#tab-risk" class="block text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition nav-link" data-tab="tab-risk">🛡️ 风控评估</a>
-        <a href="#tab-pm" class="block text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition nav-link" data-tab="tab-pm">👔 最终决策</a>
-      </nav>
+{# ── Main content ── #}
+<div class="flex-1 min-w-0">
+  <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-6">
+    <div class="flex border-b border-gray-800 overflow-x-auto" id="tab-headers">
+      <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-emerald-500 text-emerald-400 whitespace-nowrap" data-tab="tab-market">📊 技术分析</button>
+      <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-sentiment">💬 情绪</button>
+      <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-news">📰 新闻</button>
+      <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-fundamentals">📋 基本面</button>
+      <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-policy">🏛️ 政策</button>
+      <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-hot-money">🔥 游资</button>
+      <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-lockup">🔒 解禁</button>
+      <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-quality">✅ 质量门控</button>
+      <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-debate">⚔️ 多空辩论</button>
+      <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-trader">💹 交易方案</button>
+      <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-risk">🛡️ 风控评估</button>
+      <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-pm">👔 最终决策</button>
     </div>
-  </aside>
 
-  {# ── Main content ── #}
-  <div class="flex-1 min-w-0">
-    <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-6">
-      <div class="flex border-b border-gray-800 overflow-x-auto" id="tab-headers">
-        <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-emerald-500 text-emerald-400 whitespace-nowrap" data-tab="tab-market">技术分析</button>
-        <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-sentiment">情绪</button>
-        <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-news">新闻</button>
-        <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-fundamentals">基本面</button>
-        <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-policy">政策</button>
-        <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-hot-money">游资</button>
-        <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-lockup">解禁</button>
-        <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-quality">质量门控</button>
-        <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-debate">多空辩论</button>
-        <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-trader">交易方案</button>
-        <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-risk">风控评估</button>
-        <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-pm">最终决策</button>
+    <div class="p-6 min-h-96" id="report-content">
+      <div id="tab-market" class="tab-panel">
+        <div id="cnt-market" class="report-raw prose prose-invert prose-sm max-w-none prose-headings:text-gray-100 prose-p:text-gray-300 prose-strong:text-gray-100 prose-code:text-emerald-400 prose-a:text-emerald-400 prose-table:text-gray-300">{{ reports.market_report or '（暂无数据）' }}</div>
       </div>
-
-      <div class="p-6 min-h-96" id="report-content">
-        <div id="tab-market" class="tab-panel">
-          <div id="cnt-market" class="report-raw prose prose-invert prose-sm max-w-none prose-headings:text-gray-100 prose-p:text-gray-300 prose-strong:text-gray-100 prose-code:text-emerald-400 prose-a:text-emerald-400 prose-table:text-gray-300">{{ reports.market_report or '（暂无数据）' }}</div>
-        </div>
-        <div id="tab-sentiment" class="tab-panel hidden"><div id="cnt-sentiment" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.sentiment_report or '（暂无数据）' }}</div></div>
-        <div id="tab-news" class="tab-panel hidden"><div id="cnt-news" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.news_report or '（暂无数据）' }}</div></div>
-        <div id="tab-fundamentals" class="tab-panel hidden"><div id="cnt-fundamentals" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.fundamentals_report or '（暂无数据）' }}</div></div>
-        <div id="tab-policy" class="tab-panel hidden"><div id="cnt-policy" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.policy_report or '（暂无数据）' }}</div></div>
-        <div id="tab-hot-money" class="tab-panel hidden"><div id="cnt-hot-money" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.hot_money_report or '（暂无数据）' }}</div></div>
-        <div id="tab-lockup" class="tab-panel hidden"><div id="cnt-lockup" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.lockup_report or '（暂无数据）' }}</div></div>
-        <div id="tab-quality" class="tab-panel hidden"><div id="cnt-quality" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.data_quality_summary or '（暂无数据）' }}</div></div>
-        <div id="tab-debate" class="tab-panel hidden"><div id="cnt-debate" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.investment_plan or '（暂无数据）' }}</div></div>
-        <div id="tab-trader" class="tab-panel hidden"><div id="cnt-trader" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.trader_investment_plan or '（暂无数据）' }}</div></div>
-        <div id="tab-risk" class="tab-panel hidden"><div id="cnt-risk" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.risk_judge_decision or '（暂无数据）' }}</div></div>
-        <div id="tab-pm" class="tab-panel hidden"><div id="cnt-pm" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.final_trade_decision or '（暂无数据）' }}</div></div>
-      </div>
+      <div id="tab-sentiment" class="tab-panel hidden"><div id="cnt-sentiment" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.sentiment_report or '（暂无数据）' }}</div></div>
+      <div id="tab-news" class="tab-panel hidden"><div id="cnt-news" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.news_report or '（暂无数据）' }}</div></div>
+      <div id="tab-fundamentals" class="tab-panel hidden"><div id="cnt-fundamentals" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.fundamentals_report or '（暂无数据）' }}</div></div>
+      <div id="tab-policy" class="tab-panel hidden"><div id="cnt-policy" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.policy_report or '（暂无数据）' }}</div></div>
+      <div id="tab-hot-money" class="tab-panel hidden"><div id="cnt-hot-money" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.hot_money_report or '（暂无数据）' }}</div></div>
+      <div id="tab-lockup" class="tab-panel hidden"><div id="cnt-lockup" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.lockup_report or '（暂无数据）' }}</div></div>
+      <div id="tab-quality" class="tab-panel hidden"><div id="cnt-quality" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.data_quality_summary or '（暂无数据）' }}</div></div>
+      <div id="tab-debate" class="tab-panel hidden"><div id="cnt-debate" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.investment_plan or '（暂无数据）' }}</div></div>
+      <div id="tab-trader" class="tab-panel hidden"><div id="cnt-trader" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.trader_investment_plan or '（暂无数据）' }}</div></div>
+      <div id="tab-risk" class="tab-panel hidden"><div id="cnt-risk" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.risk_judge_decision or '（暂无数据）' }}</div></div>
+      <div id="tab-pm" class="tab-panel hidden"><div id="cnt-pm" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.final_trade_decision or '（暂无数据）' }}</div></div>
     </div>
   </div>
 </div>
@@ -199,12 +168,6 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.getElementById(tab)?.classList.remove('hidden');
     btn.classList.add('border-emerald-500','text-emerald-400');
     btn.classList.remove('border-transparent','text-gray-400');
-  });
-});
-document.querySelectorAll('.nav-link').forEach(link => {
-  link.addEventListener('click', e => {
-    e.preventDefault();
-    document.querySelector(`.tab-btn[data-tab="${link.dataset.tab}"]`)?.click();
   });
 });
 
