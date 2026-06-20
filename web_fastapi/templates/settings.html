@@ -53,7 +53,6 @@
     <table id="records-table" class="w-full text-sm hidden">
       <thead class="bg-gray-800 text-gray-400">
         <tr>
-          <th class="text-left px-6 py-3 font-medium">任务 ID</th>
           <th class="text-left px-4 py-3 font-medium">股票</th>
           <th class="text-left px-4 py-3 font-medium">模型</th>
           <th class="text-right px-4 py-3 font-medium">输入 Token</th>
@@ -117,8 +116,7 @@ function render(data) {
     const costStr = r.total_cost != null ? '¥ ' + parseFloat(r.total_cost).toFixed(4) : '-';
     const model = r.model || '-';
     return `<tr class="hover:bg-gray-800/50">
-      <td class="px-6 py-3"><a href="/report/${r.task_id}" class="text-emerald-400 hover:underline font-mono">${r.task_id}</a></td>
-      <td class="px-4 py-3 font-medium">${r.ticker}</td>
+      <td class="px-4 py-3"><a href="/report/${r.task_id}" class="text-emerald-400 hover:underline">${r.ticker}</a></td>
       <td class="px-4 py-3 text-gray-300 text-xs">${model}</td>
       <td class="px-4 py-3 text-right text-gray-300">${r.tokens_in.toLocaleString()}</td>
       <td class="px-4 py-3 text-right text-gray-300">${r.tokens_out.toLocaleString()}</td>
