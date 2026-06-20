@@ -15,26 +15,6 @@
     </div>
   </div>
 
-  {# ── Token pricing (read-only) ────────────────────────────────────────────── #}
-  <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6">
-    <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
-      💰 计费标准
-      <span class="text-xs text-gray-500 font-normal">(管理员统一设置，仅供查看)</span>
-    </h2>
-    <div class="grid grid-cols-2 gap-4">
-      <div class="bg-gray-800 rounded-xl p-4 text-center">
-        <div class="text-xs text-gray-400 mb-1">输入 Token</div>
-        <div class="text-xl font-bold text-yellow-400" id="input-price">-</div>
-        <div class="text-xs text-gray-500 mt-1">¥ / 百万 token</div>
-      </div>
-      <div class="bg-gray-800 rounded-xl p-4 text-center">
-        <div class="text-xs text-gray-400 mb-1">输出 Token</div>
-        <div class="text-xl font-bold text-orange-400" id="output-price">-</div>
-        <div class="text-xs text-gray-500 mt-1">¥ / 百万 token</div>
-      </div>
-    </div>
-  </div>
-
   {# ── Billing history ────────────────────────────────────────────────────────── #}
   <div class="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
     <div class="flex items-center justify-between px-6 py-4 border-b border-gray-800">
@@ -90,8 +70,6 @@ function render(data) {
 
   const inP = parseFloat(data.input_price_per_million || 2.10);
   const outP = parseFloat(data.output_price_per_million || 8.40);
-  document.getElementById('input-price').textContent = '¥' + inP.toFixed(2);
-  document.getElementById('output-price').textContent = '¥' + outP.toFixed(2);
   document.getElementById('input-price-display').textContent = '输入: ¥' + inP.toFixed(2) + '/M token';
   document.getElementById('output-price-display').textContent = '输出: ¥' + outP.toFixed(2) + '/M token';
 
