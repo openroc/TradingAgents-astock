@@ -233,3 +233,7 @@ __marimo__/
 # FastAPI data (runtime user data, do not commit)
 web_fastapi/__pycache__/
 web_fastapi/routers/__pycache__/
+
+# Large font bundles — download-on-demand or install locally
+web/assets/fonts/NotoSansSC-Regular.otf
+web/assets/fonts/PingFangSC-Regular.ttf

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import platform
 import re
 from datetime import datetime
 from pathlib import Path
@@ -11,19 +10,46 @@ from typing import Any
 from fpdf import FPDF
 
 
-_FONT_CANDIDATES = [
-    "/System/Library/Fonts/PingFang.ttc",
-    "/System/Library/Fonts/STHeiti Light.ttc",
-    "/usr/share/fonts/truetype/noto/NotoSansSC-Regular.ttf",
-    "/usr/share/fonts/noto-cjk/NotoSansCJKsc-Regular.otf",
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-]
+# Bundled font: extracted from macOS PingFang.ttc (Simplified Chinese, index 2)
+# Using a standalone TTF ensures proper CIDFont embedding in the PDF, avoiding
+# the garbled-character issue that occurs when FPDF reads TTC files incorrectly.
+_FONT_DIR = Path(__file__).parent / "assets" / "fonts"
+_BUNDLED_FONT = _FONT_DIR / "NotoSansSC-Regular.otf"
+_BUNDLED_FONT_B = _FONT_DIR / "NotoSansSC-Regular.otf"
+
+# CDN URL for Noto Sans SC (Chinese Simplified) - subset by fontsource package
+_NOTO_CJK_CDN = (
+    "https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-sc@5.0.3/"
+    "files/noto-sans-sc-chinese-simplified-400-normal.woff2"
+)
+
+
+def _ensure_cjk_font() -> None:
+    """Download NotoSansSC font if bundled font is missing (one-time download)."""
+    if _BUNDLED_FONT.exists():
+        return
+    try:
+        import urllib.request
+        _FONT_DIR.mkdir(parents=True, exist_ok=True)
+        urllib.request.urlretrieve(_NOTO_CJK_CDN, _BUNDLED_FONT)
+    except Exception:
+        pass
 
 
 def _find_cjk_font() -> str | None:
-    for path in _FONT_CANDIDATES:
-        if Path(path).exists():
-            return path
+    _ensure_cjk_font()
+    if _BUNDLED_FONT.exists():
+        return str(_BUNDLED_FONT)
+    # Linux fallback: look for a system Noto CJK TTF/OTF
+    for candidate in [
+        "/usr/share/fonts/truetype/noto/NotoSansSC-Regular.ttf",
+        "/usr/share/fonts/noto-cjk/NotoSansCJKsc-Regular.otf",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+    ]:
+        p = Path(candidate)
+        if p.exists() and p.suffix in (".ttf", ".otf"):
+            return candidate
     return None
 
 
@@ -53,8 +79,16 @@ _NON_CJK_RE = re.compile(
 )
 
 
+_CJK_STRIP_RE = re.compile(r"[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]")
+_has_cjk_font = _find_cjk_font() is not None
+
+
 def _safe_pdf_text(text: str) -> str:
-    return _NON_CJK_RE.sub("", text)
+    """Strip emoji/symbols. If no CJK font is available, also strip CJK to avoid garbled output."""
+    text = _NON_CJK_RE.sub("", text)
+    if not _has_cjk_font:
+        text = _CJK_STRIP_RE.sub("", text)
+    return text
 
 
 def _signal_color(signal: str) -> tuple[int, int, int]:
