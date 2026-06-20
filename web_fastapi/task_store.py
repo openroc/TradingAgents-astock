@@ -127,6 +127,7 @@ class AnalysisTask:
     created_at: float = field(default_factory=time.time)
     config: dict = field(default_factory=dict)
     report_summary: Optional[dict] = None
+    total_elapsed: Optional[float] = None  # fixed final duration for completed tasks
     final_state: Optional[dict] = None
 
 
@@ -158,6 +159,8 @@ class TaskStore:
             "created_at": task.created_at,
             "signal": task.tracker.signal,
             "elapsed": task.tracker.elapsed,
+            "total_elapsed": task.total_elapsed,
+            "start_time": task.tracker.start_time,
             "llm_calls": task.tracker.llm_calls,
             "tool_calls": task.tracker.tool_calls,
             "tokens_in": task.tracker.tokens_in,
@@ -181,6 +184,14 @@ class TaskStore:
         tracker.completed_stages = d.get("completed_stages", [])
         if d["status"] == "completed":
             tracker.is_complete = True
+        # Restore saved elapsed/start_time so list UI shows correct duration
+        # elapsed is a read-only property (computed from start_time), so we
+        # derive the correct start_time to match the saved elapsed value
+        saved_elapsed = d.get("elapsed")
+        if saved_elapsed is not None:
+            tracker.start_time = time.time() - saved_elapsed
+        # Restore total_elapsed so completed tasks show the fixed final duration
+        total_elapsed = d.get("total_elapsed")
         return AnalysisTask(
             task_id=d["task_id"],
             user_id=d["user_id"],
@@ -191,6 +202,7 @@ class TaskStore:
             created_at=d["created_at"],
             tracker=tracker,
             report_summary=d.get("report_summary"),
+            total_elapsed=d.get("total_elapsed"),
             final_state=d.get("final_state"),
             config=d.get("config", {}),
         )
@@ -353,6 +365,7 @@ class TaskStore:
                 task = self._tasks[task_id]
                 task.status = "completed"
                 task.tracker = tracker
+                task.total_elapsed = tracker.elapsed
                 task.report_summary = report_summary
                 task.final_state = final_state
                 self._dirty = True
@@ -381,7 +394,7 @@ class TaskStore:
                 "error": t.error,
                 "signal": t.tracker.signal,
                 "created_at": t.created_at,
-                "elapsed": t.tracker.elapsed,
+                "elapsed": t.total_elapsed if t.total_elapsed is not None else t.tracker.elapsed,
             })
         return {
             "total": total,
