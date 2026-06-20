@@ -16,33 +16,30 @@
 {% block content %}
 
 {# ── Header ── #}
-<div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+<div class="flex flex-wrap items-center gap-4 mb-6">
   <div>
     <h1 class="text-3xl font-bold">
       <span id="hdr-ticker" class="text-emerald-400">{{ ticker }}</span>
       <span id="hdr-date" class="text-gray-500 text-xl ml-2">{{ trade_date }}</span>
     </h1>
-    <p class="text-gray-400 text-sm mt-1">多 Agent 研判 · <span id="hdr-elapsed">{{ elapsed }}s</span></p>
-  </div>
-
-  <div class="flex items-center gap-3">
-    <span id="hdr-signal-badge" class="text-lg font-bold px-4 py-2 rounded-xl
-      {% if 'BUY' in signal.upper() %}bg-green-900 text-green-400
-      {% elif 'SELL' in signal.upper() %}bg-red-900 text-red-400
-      {% else %}bg-yellow-900 text-yellow-400{% endif %}">
-      {{ signal }}
-    </span>
     {% if status == 'completed' %}
-    <a href="/report/{{ task_id }}/markdown" class="hidden md:block text-sm bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg transition">📄 MD</a>
-    <a href="/report/{{ task_id }}/pdf" class="md:hidden text-sm bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg transition">📕 PDF</a>
-    <button type="button" onclick="if(confirm('确定删除此任务？删除后可重新发起。'))document.getElementById('delete-form').submit()"
-            class="text-sm bg-gray-800 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition cursor-pointer">🗑 删除</button>
+    <p class="text-gray-400 text-sm mt-1">
+      <span id="hdr-signal-badge" class="font-bold
+        {% if 'BUY' in signal.upper() %}text-green-400
+        {% elif 'SELL' in signal.upper() %}text-red-400
+        {% else %}text-yellow-400{% endif %}">
+        {{ signal }}
+      </span>
+      <span class="mx-2">·</span>
+      <a href="/report/{{ task_id }}/markdown" class="hidden md:inline text-gray-400 hover:text-gray-200 underline text-xs">📄 MD</a>
+      <a href="/report/{{ task_id }}/pdf" class="md:hidden text-gray-400 hover:text-gray-200 underline text-xs">📕 PDF</a>
+    </p>
     {% endif %}
   </div>
 </div>
 
 {# ── Stats bar ── #}
-<div class="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 mb-8">
+<div class="grid grid-cols-2 md:grid-cols-6 gap-3 md:gap-4 mb-8">
   <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
     <div id="stat-llm" class="text-2xl font-bold text-emerald-400">{{ llm_calls }}</div>
     <div class="text-xs text-gray-500 mt-1">LLM 调用</div>
@@ -58,6 +55,10 @@
   <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
     <div id="stat-tokens-out" class="text-2xl font-bold text-orange-400">{{ tokens_out }}</div>
     <div class="text-xs text-gray-500 mt-1">输出 Token ↓</div>
+  </div>
+  <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
+    <div id="stat-elapsed" class="text-2xl font-bold text-gray-300">{{ elapsed }}</div>
+    <div class="text-xs text-gray-500 mt-1">运行时长 s</div>
   </div>
   <div class="bg-gray-900 border border-yellow-700/40 rounded-xl p-4 text-center">
     <div id="stat-cost" class="text-2xl font-bold text-yellow-400">{% if task_cost and task_cost > 0 %}¥ {{ '%.4f'|format(task_cost) }}{% else %}-{% endif %}</div>
@@ -77,20 +78,20 @@
       <div>已用时 <span id="run-elapsed">0</span>s</div>
       <div>LLM <span id="run-llm">0</span> · 工具 <span id="run-tools">0</span></div>
     </div>
+    <div class="flex gap-2 ml-4">
+      <button id="btn-rerun" class="bg-red-700 hover:bg-red-600 text-white px-4 py-1.5 rounded-lg text-xs transition cursor-pointer">
+        🔄 重新开始
+      </button>
+      <button type="button" onclick="if(confirm('确定删除此任务？'))document.getElementById('delete-form').submit()"
+              class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-1.5 rounded-lg text-xs transition cursor-pointer">
+        🗑 删除
+      </button>
+    </div>
   </div>
   <div class="w-full bg-gray-700 rounded-full h-2 mb-3">
     <div id="run-progress" class="bg-emerald-500 h-2 rounded-full transition-all" style="width:0%"></div>
   </div>
-  <div id="run-stages" class="flex flex-wrap gap-2 mb-3"></div>
-  <div class="flex gap-2">
-    <button id="btn-rerun" class="bg-red-700 hover:bg-red-600 text-white px-4 py-1.5 rounded-lg text-xs transition">
-      🔄 重新开始
-    </button>
-    <button type="button" onclick="if(confirm('确定删除此任务？'))document.getElementById('delete-form').submit()"
-            class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-1.5 rounded-lg text-xs transition cursor-pointer">
-      🗑 删除
-    </button>
-  </div>
+  <div id="run-stages" class="flex flex-wrap gap-2"></div>
 </div>
 
 {# ── Error panel (task failed) ── #}
@@ -243,7 +244,7 @@ function updateRunningPanel(data) {
 
 // ── Update stats (header + stat bar) ───────────────────────────────────
 function updateStats(data) {
-  document.getElementById('hdr-elapsed').textContent = (data.elapsed || 0) + 's';
+  document.getElementById('stat-elapsed').textContent = data.elapsed || 0;
   document.getElementById('stat-llm').textContent = data.llm_calls || 0;
   document.getElementById('stat-tools').textContent = data.tool_calls || 0;
   document.getElementById('stat-tokens-in').textContent = data.tokens_in || 0;
@@ -265,14 +266,16 @@ function updateStats(data) {
 
   if (data.signal) {
     const badge = document.getElementById('hdr-signal-badge');
-    badge.textContent = data.signal;
-    badge.className = 'text-lg font-bold px-4 py-2 rounded-xl';
-    if (data.signal.toUpperCase().includes('BUY')) {
-      badge.classList.add('bg-green-900','text-green-400');
-    } else if (data.signal.toUpperCase().includes('SELL')) {
-      badge.classList.add('bg-red-900','text-red-400');
-    } else {
-      badge.classList.add('bg-yellow-900','text-yellow-400');
+    if (badge) {
+      badge.textContent = data.signal;
+      badge.className = 'font-bold';
+      if (data.signal.toUpperCase().includes('BUY')) {
+        badge.classList.add('text-green-400');
+      } else if (data.signal.toUpperCase().includes('SELL')) {
+        badge.classList.add('text-red-400');
+      } else {
+        badge.classList.add('text-yellow-400');
+      }
     }
   }
 }
@@ -315,22 +318,20 @@ async function poll() {
       updateReportContent(data);
       document.getElementById('running-panel').classList.add('hidden');
       document.getElementById('error-panel').classList.add('hidden');
-      // Show download buttons now that the task is done
-      const taskId = document.querySelector('[data-task-id]')?.dataset.taskId
-        || window.location.pathname.split('/report/')[1]?.split('/')[0];
-      if (taskId) {
-        const btnArea = document.querySelector('#hdr-signal-badge')?.parentElement;
-        if (btnArea && !btnArea.querySelector('.btn-md')) {
-          const md = document.createElement('a');
-          md.href = `/report/${taskId}/markdown`;
-          md.className = 'btn-md text-sm bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg transition';
-          md.textContent = '📄 MD';
-          const pdf = document.createElement('a');
-          pdf.href = `/report/${taskId}/pdf`;
-          pdf.className = 'text-sm bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg transition';
-          pdf.textContent = '📕 PDF';
-          btnArea.appendChild(md);
-          btnArea.appendChild(pdf);
+      // Show signal + download links in header when running task completes
+      if (INIT_STATUS !== 'completed') {
+        const headerDiv = document.querySelector('#hdr-ticker')?.parentElement?.parentElement;
+        if (headerDiv) {
+          headerDiv.innerHTML = `<h1 class="text-3xl font-bold">
+            <span id="hdr-ticker" class="text-emerald-400">${document.getElementById('hdr-ticker')?.textContent || ''}</span>
+            <span id="hdr-date" class="text-gray-500 text-xl ml-2">${document.getElementById('hdr-date')?.textContent || ''}</span>
+          </h1>
+          <p class="text-gray-400 text-sm mt-1">
+            <span id="hdr-signal-badge" class="font-bold text-yellow-400">${data.signal || ''}</span>
+            <span class="mx-2">·</span>
+            <a href="/report/${TASK_ID}/markdown" class="hidden md:inline text-gray-400 hover:text-gray-200 underline text-xs">📄 MD</a>
+            <a href="/report/${TASK_ID}/pdf" class="md:hidden text-gray-400 hover:text-gray-200 underline text-xs">📕 PDF</a>
+          </p>`;
         }
       }
     } else if (data.status === 'error' || data.status === 'abort') {
