@@ -43,6 +43,12 @@ def _record_partial_billing_for_running_tasks() -> None:
                 if task.status == "running" and task.tracker.tokens_in > 0:
                     model_name = task.config.get("deep_think_llm", "unknown")
                     billing = get_billing_store(user.id)
+                    user_pricing = None
+                    if user.input_price_per_million and user.output_price_per_million:
+                        user_pricing = {
+                            "input_price_per_million": user.input_price_per_million,
+                            "output_price_per_million": user.output_price_per_million,
+                        }
                     try:
                         billing.record_task(
                             task_id=task_id,
@@ -50,6 +56,7 @@ def _record_partial_billing_for_running_tasks() -> None:
                             tokens_in=task.tracker.tokens_in,
                             tokens_out=task.tracker.tokens_out,
                             model_name=model_name,
+                            user_pricing=user_pricing,
                         )
                         count += 1
                         logger.info("  Recorded partial billing: %s (%s tokens_in=%d)", task_id, task.ticker, task.tracker.tokens_in)

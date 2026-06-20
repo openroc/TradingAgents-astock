@@ -10,7 +10,6 @@ from pathlib import Path
 from web_fastapi.auth import Session, get_current_user
 from web_fastapi.user_store import get_user_by_id
 from web_fastapi.billing_store import get_billing_store
-from web_fastapi.model_pricing import get_model_pricing
 
 _templates = Jinja2Templates(
     directory=Path(__file__).parent.parent / "templates"
@@ -38,7 +37,6 @@ def billing_data(
         return {"cumulative_cost": 0.0, "input_price_per_million": 2.10, "output_price_per_million": 8.40, "total": 0, "records": []}
     billing = get_billing_store(session.user_id)
     result = billing.get_records(page=page, page_size=page_size)
-    model_pricing = get_model_pricing(user.default_model)
-    result["input_price_per_million"] = model_pricing["input_price_per_million"]
-    result["output_price_per_million"] = model_pricing["output_price_per_million"]
+    result["input_price_per_million"] = user.input_price_per_million
+    result["output_price_per_million"] = user.output_price_per_million
     return result
