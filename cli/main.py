@@ -1347,5 +1347,28 @@ def users_delete(
         raise typer.Exit(1)
 
 
+@users_app.command("reset-password")
+def users_reset_password(
+    username: str = typer.Argument(..., help="Username whose password to reset"),
+    new_password: str = typer.Argument(..., help="New password for this user"),
+):
+    """Reset a user's password (admin only)."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from web_fastapi.user_store import get_user_by_username, update_user
+
+    user = get_user_by_username(username)
+    if user is None:
+        console.print(f"[red]Error:[/red] User '{username}' not found.")
+        raise typer.Exit(1)
+
+    updated = update_user(user.id, password=new_password)
+    if updated:
+        console.print(f"[green]Password reset for:[/green] {username}")
+    else:
+        console.print(f"[red]Error:[/red] Failed to update password for '{username}'.")
+        raise typer.Exit(1)
+
+
 if __name__ == "__main__":
     app()
