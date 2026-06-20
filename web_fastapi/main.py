@@ -21,7 +21,7 @@ from web_fastapi.config import DEFAULT_BACKEND_URLS
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_PROJECT_ROOT))
 
-from web_fastapi.routers import tasks, report, auth as auth_router, admin
+from web_fastapi.routers import tasks, report, auth as auth_router, admin, settings
 from web_fastapi.auth import SESSION_COOKIE, _get_session
 
 logging.basicConfig(
@@ -67,6 +67,7 @@ app.include_router(auth_router.router)
 app.include_router(admin.router)
 app.include_router(tasks.router)
 app.include_router(report.router)
+app.include_router(settings.router)
 
 
 # ── Root — check auth, redirect to login if not authenticated ─────────────────

@@ -71,8 +71,24 @@ def run_analysis(task_id: str, ticker: str, trade_date: str, config: dict) -> No
 
         _save_report_to_disk(last_chunk, ticker, trade_date)
 
+        # Record billing (uses model pricing from models.json)
+        task_cost = None
+        try:
+            from web_fastapi.billing_store import get_billing_store
+            billing = get_billing_store(task.user_id)
+            model_name = task.config.get("deep_think_llm", "unknown")
+            task_cost = billing.record_task(
+                task_id=task_id,
+                ticker=ticker,
+                tokens_in=task.tracker.tokens_in,
+                tokens_out=task.tracker.tokens_out,
+                model_name=model_name,
+            )
+        except Exception as exc:
+            logger.warning("[%s] Failed to record billing: %s", task_id, exc)
+
         store.update_completed(
-            task_id, task.tracker, report_summary, final_state=last_chunk
+            task_id, task.tracker, report_summary, final_state=last_chunk, cost=task_cost
         )
         store.update_status(task_id, "completed")
 

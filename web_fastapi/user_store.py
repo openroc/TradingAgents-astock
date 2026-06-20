@@ -26,6 +26,8 @@ class User:
     max_concurrency: int = 2
     default_model: str = "MiniMax-M2.7"
     default_provider: str = "oneapi"
+    input_price_per_million: float = 2.10   # ¥ / 1M input tokens
+    output_price_per_million: float = 8.40   # ¥ / 1M output tokens
 
 
 def _init_data_dir():
@@ -107,6 +109,8 @@ def _load() -> None:
                     max_concurrency=d.get("max_concurrency", 2),
                     default_model=d.get("default_model", "MiniMax-M2.7"),
                     default_provider=d.get("default_provider", "oneapi"),
+                    input_price_per_million=d.get("input_price_per_million", 2.10),
+                    output_price_per_million=d.get("output_price_per_million", 8.40),
                 )
                 _users[u.id] = u
         logger.info("Loaded %d users", len(_users))
@@ -128,6 +132,8 @@ def _save() -> None:
                     "max_concurrency": u.max_concurrency,
                     "default_model": u.default_model,
                     "default_provider": u.default_provider,
+                    "input_price_per_million": u.input_price_per_million,
+                    "output_price_per_million": u.output_price_per_million,
                 }
                 for u in _users.values()
             ]
@@ -180,6 +186,8 @@ def create_user(
     max_concurrency: int = 2,
     default_model: str = "MiniMax-M2.7",
     default_provider: str = "oneapi",
+    input_price_per_million: float = 2.10,
+    output_price_per_million: float = 8.40,
 ) -> User:
     """Create a new user. Raises ValueError if username already exists."""
     if get_user_by_username(username) is not None:
@@ -192,6 +200,8 @@ def create_user(
         max_concurrency=max_concurrency,
         default_model=default_model,
         default_provider=default_provider,
+        input_price_per_million=input_price_per_million,
+        output_price_per_million=output_price_per_million,
     )
     with _lock:
         _users[user.id] = user
@@ -207,6 +217,8 @@ def update_user(
     max_concurrency: Optional[int] = None,
     default_model: Optional[str] = None,
     default_provider: Optional[str] = None,
+    input_price_per_million: Optional[float] = None,
+    output_price_per_million: Optional[float] = None,
 ) -> Optional[User]:
     """Update user fields. Returns None if user not found."""
     with _lock:
@@ -223,6 +235,10 @@ def update_user(
             user.default_model = default_model
         if default_provider is not None:
             user.default_provider = default_provider
+        if input_price_per_million is not None:
+            user.input_price_per_million = input_price_per_million
+        if output_price_per_million is not None:
+            user.output_price_per_million = output_price_per_million
     _save()
     return user
 

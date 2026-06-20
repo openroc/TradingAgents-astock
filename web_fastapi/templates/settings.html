@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}个人设置 - XT{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-8">
+
+  {# ── Cumulative cost banner ──────────────────────────────────────────────── #}
+  <div class="bg-gradient-to-r from-gray-900 to-gray-800 border border-emerald-800/40 rounded-2xl p-8 text-center">
+    <div class="text-sm text-emerald-400/80 uppercase tracking-widest mb-3">累计费用</div>
+    <div class="text-5xl font-black text-emerald-400" id="cumulative-cost">加载中...</div>
+    <div class="text-sm text-gray-500 mt-3">
+      <span id="input-price-display"></span>
+      &nbsp;·&nbsp;
+      <span id="output-price-display"></span>
+    </div>
+  </div>
+
+  {# ── Token pricing (read-only) ────────────────────────────────────────────── #}
+  <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6">
+    <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+      💰 计费标准
+      <span class="text-xs text-gray-500 font-normal">(管理员统一设置，仅供查看)</span>
+    </h2>
+    <div class="grid grid-cols-2 gap-4">
+      <div class="bg-gray-800 rounded-xl p-4 text-center">
+        <div class="text-xs text-gray-400 mb-1">输入 Token</div>
+        <div class="text-xl font-bold text-yellow-400" id="input-price">-</div>
+        <div class="text-xs text-gray-500 mt-1">¥ / 百万 token</div>
+      </div>
+      <div class="bg-gray-800 rounded-xl p-4 text-center">
+        <div class="text-xs text-gray-400 mb-1">输出 Token</div>
+        <div class="text-xl font-bold text-orange-400" id="output-price">-</div>
+        <div class="text-xs text-gray-500 mt-1">¥ / 百万 token</div>
+      </div>
+    </div>
+  </div>
+
+  {# ── Billing history ────────────────────────────────────────────────────────── #}
+  <div class="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+      <h2 class="text-lg font-semibold">📋 计费明细</h2>
+      <div class="flex items-center gap-2 text-sm">
+        <button id="prev-page" class="px-3 py-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-sm">上一页</button>
+        <span id="pagination-info" class="text-gray-400 text-sm"></span>
+        <button id="next-page" class="px-3 py-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-sm">下一页</button>
+      </div>
+    </div>
+
+    <div id="records-empty" class="px-6 py-12 text-center text-gray-500 hidden">
+      暂无计费记录
+    </div>
+
+    <table id="records-table" class="w-full text-sm hidden">
+      <thead class="bg-gray-800 text-gray-400">
+        <tr>
+          <th class="text-left px-6 py-3 font-medium">任务 ID</th>
+          <th class="text-left px-4 py-3 font-medium">股票</th>
+          <th class="text-left px-4 py-3 font-medium">模型</th>
+          <th class="text-right px-4 py-3 font-medium">输入 Token</th>
+          <th class="text-right px-4 py-3 font-medium">输出 Token</th>
+          <th class="text-right px-4 py-3 font-medium">费用</th>
+          <th class="text-left px-4 py-3 font-medium">完成时间</th>
+        </tr>
+      </thead>
+      <tbody id="records-body" class="divide-y divide-gray-800"></tbody>
+    </table>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentPage = 1;
+
+async function loadBilling(page = 1) {
+  try {
+    const resp = await fetch(`/settings/billing?page=${page}&page_size=20`, { credentials: 'include' });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    currentPage = data.page;
+    render(data);
+  } catch (err) {
+    document.getElementById('cumulative-cost').textContent = '加载失败';
+  }
+}
+
+function render(data) {
+  const cumulative = parseFloat(data.cumulative_cost || 0);
+  document.getElementById('cumulative-cost').textContent = '¥ ' + cumulative.toFixed(4);
+
+  const inP = parseFloat(data.input_price_per_million || 2.10);
+  const outP = parseFloat(data.output_price_per_million || 8.40);
+  document.getElementById('input-price').textContent = '¥' + inP.toFixed(2);
+  document.getElementById('output-price').textContent = '¥' + outP.toFixed(2);
+  document.getElementById('input-price-display').textContent = '输入: ¥' + inP.toFixed(2) + '/M token';
+  document.getElementById('output-price-display').textContent = '输出: ¥' + outP.toFixed(2) + '/M token';
+
+  const totalPages = Math.ceil((data.total || 0) / 20) || 1;
+  document.getElementById('pagination-info').textContent =
+    `第 ${data.page} / ${totalPages} 页  共 ${data.total} 条`;
+  document.getElementById('prev-page').disabled = data.page <= 1;
+  document.getElementById('next-page').disabled = data.page >= totalPages;
+
+  const tbody = document.getElementById('records-body');
+  if (!data.records || data.records.length === 0) {
+    document.getElementById('records-table').classList.add('hidden');
+    document.getElementById('records-empty').classList.remove('hidden');
+    return;
+  }
+  document.getElementById('records-table').classList.remove('hidden');
+  document.getElementById('records-empty').classList.add('hidden');
+
+  tbody.innerHTML = data.records.map(r => {
+    const date = new Date(r.completed_at * 1000);
+    const dateStr = date.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    const costStr = r.total_cost != null ? '¥ ' + parseFloat(r.total_cost).toFixed(4) : '-';
+    const model = r.model || '-';
+    return `<tr class="hover:bg-gray-800/50">
+      <td class="px-6 py-3"><a href="/report/${r.task_id}" class="text-emerald-400 hover:underline font-mono">${r.task_id}</a></td>
+      <td class="px-4 py-3 font-medium">${r.ticker}</td>
+      <td class="px-4 py-3 text-gray-300 text-xs">${model}</td>
+      <td class="px-4 py-3 text-right text-gray-300">${r.tokens_in.toLocaleString()}</td>
+      <td class="px-4 py-3 text-right text-gray-300">${r.tokens_out.toLocaleString()}</td>
+      <td class="px-4 py-3 text-right text-yellow-400 font-medium">${costStr}</td>
+      <td class="px-4 py-3 text-gray-400">${dateStr}</td>
+    </tr>`;
+  }).join('');
+}
+
+document.getElementById('prev-page').addEventListener('click', () => {
+  if (currentPage > 1) loadBilling(currentPage - 1);
+});
+document.getElementById('next-page').addEventListener('click', () => {
+  loadBilling(currentPage + 1);
+});
+
+loadBilling(currentPage);
+</script>
+{% endblock %}

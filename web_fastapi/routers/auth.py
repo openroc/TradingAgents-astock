@@ -74,10 +74,26 @@ def logout(request: Request):
 def me(request: Request):
     """Return current user info (requires auth)."""
     session = get_current_user(request)
+    user = get_user_by_id(session.user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    try:
+        from web_fastapi.billing_store import get_billing_store
+        from web_fastapi.model_pricing import get_model_pricing
+        billing = get_billing_store(session.user_id)
+        cumulative_cost = billing.get_cumulative_cost()
+        model_pricing = get_model_pricing(user.default_model)
+    except Exception:
+        cumulative_cost = 0.0
+        model_pricing = {"input_price_per_million": 2.10, "output_price_per_million": 8.40}
     return {
         "user_id": session.user_id,
         "username": session.username,
         "is_admin": session.is_admin,
+        "cumulative_cost": cumulative_cost,
+        "default_model": user.default_model,
+        "input_price_per_million": model_pricing["input_price_per_million"],
+        "output_price_per_million": model_pricing["output_price_per_million"],
     }
 
 

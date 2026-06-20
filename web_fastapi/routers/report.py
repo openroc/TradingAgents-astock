@@ -69,6 +69,29 @@ async def view_report(
         ) if state else "",
     }
 
+    # Compute cost from model pricing
+    task_cost = task.cost
+    model_name = None
+    input_price = None
+    output_price = None
+    if task_cost is None:
+        try:
+            from web_fastapi.model_pricing import get_model_pricing
+            model_name = task.config.get("deep_think_llm", "MiniMax-M2.7")
+            pricing = get_model_pricing(model_name)
+            input_price = pricing["input_price_per_million"]
+            output_price = pricing["output_price_per_million"]
+            tokens_in = task.tracker.tokens_in or 0
+            tokens_out = task.tracker.tokens_out or 0
+            weight = pricing.get("weight", 1.0)
+            task_cost = round(
+                ((tokens_in / 1_000_000) * input_price +
+                 (tokens_out / 1_000_000) * output_price) * weight,
+                6,
+            )
+        except Exception:
+            pass
+
     return _templates.TemplateResponse(
         request,
         "report_page.html",
@@ -85,6 +108,10 @@ async def view_report(
             "tool_calls": task.tracker.tool_calls,
             "tokens_in": task.tracker.tokens_in,
             "tokens_out": task.tracker.tokens_out,
+            "task_cost": task_cost,
+            "model_name": model_name,
+            "input_price": input_price,
+            "output_price": output_price,
         },
     )
 
@@ -136,6 +163,7 @@ def report_data(
         "tool_calls": task.tracker.tool_calls,
         "tokens_in": task.tracker.tokens_in,
         "tokens_out": task.tracker.tokens_out,
+        "cost": task.cost,
         "reports": {
             "market_report":        _to_str(state.get("market_report")),
             "sentiment_report":     _to_str(state.get("sentiment_report")),

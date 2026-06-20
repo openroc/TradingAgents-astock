@@ -40,7 +40,7 @@
 </div>
 
 {# ── Stats bar ── #}
-<div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-8">
+<div class="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 mb-8">
   <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
     <div id="stat-llm" class="text-2xl font-bold text-emerald-400">{{ llm_calls }}</div>
     <div class="text-xs text-gray-500 mt-1">LLM 调用</div>
@@ -56,6 +56,10 @@
   <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
     <div id="stat-tokens-out" class="text-2xl font-bold text-orange-400">{{ tokens_out }}</div>
     <div class="text-xs text-gray-500 mt-1">输出 Token ↓</div>
+  </div>
+  <div class="bg-gray-900 border border-yellow-700/40 rounded-xl p-4 text-center">
+    <div id="stat-cost" class="text-2xl font-bold text-yellow-400">{% if task_cost and task_cost > 0 %}¥ {{ '%.4f'|format(task_cost) }}{% else %}-{% endif %}</div>
+    <div class="text-xs text-gray-500 mt-1">💰 本次费用{% if model_name %} <span class="text-gray-600">{{ model_name }}</span>{% endif %}</div>
   </div>
 </div>
 
@@ -177,6 +181,9 @@
 const TASK_ID = "{{ task_id }}";
 const DATA_URL = `/report/${TASK_ID}/data`;
 const INIT_STATUS = "{{ status }}";
+// Embed pricing so polling JS can compute cost when task completes
+document.body.dataset.inputPrice = "{{ input_price or '' }}";
+document.body.dataset.outputPrice = "{{ output_price or '' }}";
 
 // ── Tab switching ──────────────────────────────────────────────────────────
 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -239,6 +246,20 @@ function updateStats(data) {
   document.getElementById('stat-tools').textContent = data.tool_calls || 0;
   document.getElementById('stat-tokens-in').textContent = data.tokens_in || 0;
   document.getElementById('stat-tokens-out').textContent = data.tokens_out || 0;
+  // Update cost when polling returns completed task data
+  const costEl = document.getElementById('stat-cost');
+  if (data.cost != null && data.cost > 0) {
+    costEl.textContent = '¥ ' + parseFloat(data.cost).toFixed(4);
+  } else if (data.status === 'completed') {
+    // Compute from tokens if cost not yet available
+    const tIn = data.tokens_in || 0;
+    const tOut = data.tokens_out || 0;
+    // Use defaults if prices not available from context
+    const inP = parseFloat(document.body.dataset.inputPrice || 2.10);
+    const outP = parseFloat(document.body.dataset.outputPrice || 8.40);
+    const computed = ((tIn / 1_000_000) * inP + (tOut / 1_000_000) * outP);
+    costEl.textContent = computed > 0 ? '¥ ' + computed.toFixed(4) : '-';
+  }
 
   if (data.signal) {
     const badge = document.getElementById('hdr-signal-badge');

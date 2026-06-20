@@ -2,8 +2,21 @@
 {% block title %}任务列表 - XT{% endblock %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto">
-  <div class="flex items-center justify-between mb-6">
+<div class="max-w-4xl mx-auto space-y-4">
+
+  {# ── Cumulative cost banner ──────────────────────────────────────────────── #}
+  <div id="cost-banner" class="bg-gradient-to-r from-gray-900 to-gray-800 border border-gray-700 rounded-xl px-6 py-4 flex items-center justify-between">
+    <div>
+      <div class="text-xs text-gray-400 mb-1">累计费用</div>
+      <div class="text-2xl font-black text-yellow-400" id="cumulative-cost">加载中...</div>
+    </div>
+    <div class="text-right text-xs text-gray-500 space-y-1">
+      <div id="input-price-display"></div>
+      <div id="output-price-display"></div>
+    </div>
+  </div>
+
+  <div class="flex items-center justify-between mb-2">
     <h1 class="text-2xl font-bold">📋 分析任务列表</h1>
     <a href="/" class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm px-4 py-2 rounded-lg transition">+ 新建分析</a>
   </div>
@@ -12,12 +25,12 @@
     <table class="w-full text-sm">
       <thead class="bg-gray-800 text-gray-400">
         <tr>
-          <th class="text-left px-4 py-3 font-medium">任务 ID</th>
           <th class="text-left px-4 py-3 font-medium">股票</th>
           <th class="text-left px-4 py-3 font-medium">日期</th>
           <th class="text-left px-4 py-3 font-medium">状态</th>
           <th class="text-left px-4 py-3 font-medium">信号</th>
           <th class="text-left px-4 py-3 font-medium">耗时</th>
+          <th class="text-right px-4 py-3 font-medium">费用</th>
           <th class="text-left px-4 py-3 font-medium">操作</th>
         </tr>
       </thead>
@@ -84,16 +97,35 @@ function renderTasks(data) {
       : `<a href="/report/${task.task_id}" class="text-gray-400 hover:underline">查看</a>`;
     const elapsed = task.elapsed > 0 ? `${task.elapsed.toFixed(1)}s` : '-';
     const statusLabel = task.status === 'abort' ? '已终止' : task.status;
+    const cost = task.cost != null
+      ? `<span class="text-yellow-400">¥ ${parseFloat(task.cost).toFixed(4)}</span>`
+      : '-';
     return `<tr class="hover:bg-gray-800/50">
-      <td class="px-4 py-3 font-mono"><a href="/report/${task.task_id}" class="text-emerald-400 hover:underline">${task.task_id}</a></td>
-      <td class="px-4 py-3 font-medium">${task.ticker}</td>
+      <td class="px-4 py-3 font-medium"><a href="/report/${task.task_id}" class="text-emerald-400 hover:underline">${task.ticker}</a></td>
       <td class="px-4 py-3 text-gray-400">${task.trade_date}</td>
       <td class="px-4 py-3"><span class="px-2 py-0.5 rounded text-xs ${statusColor}">${statusLabel}</span></td>
       <td class="px-4 py-3 text-sm">${task.signal || '-'}</td>
       <td class="px-4 py-3 text-gray-400">${elapsed}</td>
+      <td class="px-4 py-3 text-right">${cost}</td>
       <td class="px-4 py-3">${action}</td>
     </tr>`;
   }).join('');
+}
+
+async function loadCostBanner() {
+  try {
+    const resp = await fetch('/auth/me', { credentials: 'include' });
+    if (!resp.ok) throw new Error();
+    const me = await resp.json();
+    document.getElementById('cumulative-cost').textContent =
+      '¥ ' + parseFloat(me.cumulative_cost || 0).toFixed(4);
+    document.getElementById('input-price-display').textContent =
+      '输入: ¥' + parseFloat(me.input_price_per_million || 2.10).toFixed(2) + '/M';
+    document.getElementById('output-price-display').textContent =
+      '输出: ¥' + parseFloat(me.output_price_per_million || 8.40).toFixed(2) + '/M';
+  } catch (_) {
+    document.getElementById('cumulative-cost').textContent = '-';
+  }
 }
 
 document.getElementById('prev-page').addEventListener('click', () => {
@@ -103,6 +135,7 @@ document.getElementById('next-page').addEventListener('click', () => {
   currentPage++; loadTasks(currentPage);
 });
 
+loadCostBanner();
 loadTasks(currentPage);
 </script>
 {% endblock %}

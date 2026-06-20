@@ -130,6 +130,7 @@ class AnalysisTask:
     report_summary: Optional[dict] = None
     total_elapsed: Optional[float] = None  # fixed final duration for completed tasks
     final_state: Optional[dict] = None
+    cost: Optional[float] = None  # billing cost in ¥, set on completion
 
 
 # ── TaskStore ───────────────────────────────────────────────────────────────────
@@ -176,6 +177,7 @@ class TaskStore:
             "final_state": _strip_lc_message(task.final_state) if hasattr(task, "final_state") and task.final_state else {},
             "report_summary": task.report_summary,
             "config": task.config,
+            "cost": task.cost,
         }
 
     def _dict_to_task(self, d: dict) -> AnalysisTask:
@@ -213,6 +215,7 @@ class TaskStore:
             total_elapsed=d.get("total_elapsed"),
             final_state=d.get("final_state"),
             config=d.get("config", {}),
+            cost=d.get("cost"),
         )
 
     def _load(self) -> None:
@@ -481,6 +484,7 @@ class TaskStore:
         tracker: ProgressTracker,
         report_summary: Optional[dict] = None,
         final_state: Optional[dict] = None,
+        cost: Optional[float] = None,
     ) -> None:
         """Mark task as completed with full tracker state and persist."""
         with self._lock:
@@ -491,6 +495,7 @@ class TaskStore:
                 task.total_elapsed = tracker.elapsed
                 task.report_summary = report_summary
                 task.final_state = final_state
+                task.cost = cost
                 self._dirty = True
         if self._dirty:
             self._save()
@@ -519,6 +524,7 @@ class TaskStore:
                 "signal": t.tracker.signal,
                 "created_at": t.created_at,
                 "elapsed": t.total_elapsed if t.total_elapsed is not None else t.tracker.elapsed,
+                "cost": t.cost,
             })
         return {
             "total": total,

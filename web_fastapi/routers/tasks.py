@@ -74,6 +74,7 @@ class TaskStatusResponse(BaseModel):
     tokens_in: int
     tokens_out: int
     elapsed_seconds: float
+    cost: Optional[float] = None
     report_url: Optional[str] = None
 
 
@@ -164,6 +165,7 @@ def get_task_status(
         tokens_in=tracker.tokens_in,
         tokens_out=tracker.tokens_out,
         elapsed_seconds=round(tracker.elapsed, 1),
+        cost=task.cost,
         report_url=report_url,
     )
 
