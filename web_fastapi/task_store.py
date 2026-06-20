@@ -169,10 +169,10 @@ class TaskStore:
             "elapsed": task.tracker.elapsed,
             "total_elapsed": task.total_elapsed,
             "start_time": task.tracker.start_time,
-            "llm_calls": task.tracker.llm_calls,
-            "tool_calls": task.tracker.tool_calls,
-            "tokens_in": task.tracker.tokens_in,
-            "tokens_out": task.tracker.tokens_out,
+            "llm_calls": task.tracker.llm_calls or 0,
+            "tool_calls": task.tracker.tool_calls or 0,
+            "tokens_in": task.tracker.tokens_in or 0,
+            "tokens_out": task.tracker.tokens_out or 0,
             "completed_stages": task.tracker.completed_stages,
             "final_state": _strip_lc_message(task.final_state) if hasattr(task, "final_state") and task.final_state else {},
             "report_summary": task.report_summary,
@@ -186,10 +186,10 @@ class TaskStore:
             trade_date=d["trade_date"],
         )
         tracker.signal = d.get("signal", "")
-        tracker.llm_calls = d.get("llm_calls", 0)
-        tracker.tool_calls = d.get("tool_calls", 0)
-        tracker.tokens_in = d.get("tokens_in", 0)
-        tracker.tokens_out = d.get("tokens_out", 0)
+        tracker.llm_calls = d.get("llm_calls") or 0
+        tracker.tool_calls = d.get("tool_calls") or 0
+        tracker.tokens_in = d.get("tokens_in") or 0
+        tracker.tokens_out = d.get("tokens_out") or 0
         tracker.completed_stages = d.get("completed_stages", [])
         if d["status"] == "completed":
             tracker.is_complete = True
