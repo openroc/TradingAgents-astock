@@ -116,11 +116,37 @@ def _save_report_to_disk(state: dict, ticker: str, trade_date: str) -> None:
 
 
 def _update_tracker(chunk: dict, tracker) -> None:
-    """Sync a graph chunk into the ProgressTracker."""
-    for key in ("current_stage", "completed_stages"):
-        val = chunk.get(key)
-        if val is not None:
-            setattr(tracker, key, val)
+    """Sync a graph chunk into the ProgressTracker.
+
+    The graph streams chunks keyed by report field names (e.g. market_report,
+    news_report, etc.) rather than explicit stage names. We infer the active
+    stage by finding the first pipeline stage whose report_key is not yet
+    present in the accumulated tracker state.
+    """
+    from web.progress import PIPELINE_STAGES
+
+    # report_key -> stage_id reverse map
+    _report_to_stage = {s["report_key"]: s["id"] for s in PIPELINE_STAGES}
+
+    # Sync completed stages: a stage is complete when its report_key appears
+    # in the chunk with a non-empty value.
+    newly_completed = []
+    for key, val in chunk.items():
+        if key in _report_to_stage and val:
+            stage_id = _report_to_stage[key]
+            if stage_id not in tracker.completed_stages:
+                newly_completed.append(stage_id)
+
+    for stage_id in newly_completed:
+        tracker.completed_stages.append(stage_id)
+
+    # Set current_stage to the first non-completed pipeline stage.
+    completed_set = set(tracker.completed_stages)
+    active = next(
+        (s["id"] for s in PIPELINE_STAGES if s["id"] not in completed_set),
+        "",
+    )
+    tracker.current_stage = active
 
 
 def _strip(text: str) -> str:
