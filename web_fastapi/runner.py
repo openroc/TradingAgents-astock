@@ -98,6 +98,22 @@ def run_analysis(task_id: str, ticker: str, trade_date: str, config: dict) -> No
         logger.exception("[%s] Analysis failed", task_id)
         task.tracker.mark_error(str(exc))
         task.tracker.is_running = False
+
+        # Record billing even for failed tasks (tokens were consumed)
+        try:
+            from web_fastapi.billing_store import get_billing_store
+            billing = get_billing_store(task.user_id)
+            model_name = task.config.get("deep_think_llm", "unknown")
+            billing.record_task(
+                task_id=task_id,
+                ticker=ticker,
+                tokens_in=task.tracker.tokens_in,
+                tokens_out=task.tracker.tokens_out,
+                model_name=model_name,
+            )
+        except Exception as billing_exc:
+            logger.warning("[%s] Failed to record billing for failed task: %s", task_id, billing_exc)
+
         store.update_status(task_id, "error", error=str(exc))
 
 
