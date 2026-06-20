@@ -24,6 +24,44 @@ sys.path.insert(0, str(_PROJECT_ROOT))
 from web_fastapi.routers import tasks, report, auth as auth_router, admin, settings
 from web_fastapi.auth import SESSION_COOKIE, _get_session
 
+
+def _record_partial_billing_for_running_tasks() -> None:
+    """Record billing for all tasks still in 'running' status.
+
+    Called on shutdown (to capture work done before kill) and on startup
+    (to handle tasks orphaned by an abrupt previous shutdown).
+    """
+    try:
+        from web_fastapi.task_store import get_store
+        from web_fastapi.user_store import list_users
+        from web_fastapi.billing_store import get_billing_store
+        logger.info("Recording partial billing for interrupted running tasks...")
+        count = 0
+        for user in list_users():
+            store = get_store(user.id)
+            for task_id, task in store._tasks.items():
+                if task.status == "running" and task.tracker.tokens_in > 0:
+                    model_name = task.config.get("deep_think_llm", "unknown")
+                    billing = get_billing_store(user.id)
+                    try:
+                        billing.record_task(
+                            task_id=task_id,
+                            ticker=task.ticker,
+                            tokens_in=task.tracker.tokens_in,
+                            tokens_out=task.tracker.tokens_out,
+                            model_name=model_name,
+                        )
+                        count += 1
+                        logger.info("  Recorded partial billing: %s (%s tokens_in=%d)", task_id, task.ticker, task.tracker.tokens_in)
+                    except Exception:
+                        pass
+        if count:
+            logger.info("Recorded partial billing for %d interrupted tasks", count)
+        else:
+            logger.info("No interrupted running tasks to bill")
+    except Exception as exc:
+        logger.warning("Failed to record partial billing on shutdown: %s", exc)
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -33,8 +71,12 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # On startup: bill any tasks left in 'running' state by a previous crash/kill
+    _record_partial_billing_for_running_tasks()
     logger.info("XT FastAPI server started")
     yield
+    # On shutdown: bill any currently running tasks before we die
+    _record_partial_billing_for_running_tasks()
     logger.info("XT FastAPI server shutting down")
 
 

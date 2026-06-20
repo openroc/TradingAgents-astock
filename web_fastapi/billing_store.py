@@ -91,11 +91,12 @@ class BillingStore:
         tokens_in: int,
         tokens_out: int,
         model_name: str,
-    ) -> float:
+    ) -> float | None:
         """Record a completed task and return its computed cost.
 
         Pricing is looked up from models.json by model_name. The cost is added
-        to the cumulative total. Returns the per-task cost.
+        to the cumulative total. Returns the per-task cost, or None if the
+        task was already recorded (idempotent — safe to call multiple times).
         """
         from web_fastapi.model_pricing import get_model_pricing
 
@@ -124,6 +125,8 @@ class BillingStore:
         }
 
         with self._lock:
+            if any(r["task_id"] == task_id for r in self._records):
+                return None
             self._records.append(record)
             self._cumulative_cost += task_cost
 
