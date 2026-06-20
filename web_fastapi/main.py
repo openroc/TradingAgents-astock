@@ -9,10 +9,10 @@ import logging
 from pathlib import Path
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
 from web_fastapi.user_store import get_user_by_id
@@ -100,6 +100,15 @@ app.add_middleware(
 
 # ── Static & templates ─────────────────────────────────────────────────────────
 app.mount("/static", StaticFiles(directory=_PROJECT_ROOT / "assets"), name="static")
+
+
+# ── Auth redirect for HTML pages ───────────────────────────────────────────────
+@app.exception_handler(HTTPException)
+async def auth_redirect_handler(request: Request, exc: HTTPException):
+    """Redirect unauthenticated HTML requests to login instead of returning JSON 401."""
+    if exc.status_code == 401 and "text/html" in request.headers.get("accept", ""):
+        return RedirectResponse(url="/auth/login", status_code=302)
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
 templates = Jinja2Templates(directory=_PROJECT_ROOT / "web_fastapi" / "templates")
 
