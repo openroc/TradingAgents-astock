@@ -13,7 +13,6 @@ from pydantic import BaseModel, Field
 from pathlib import Path
 
 from web_fastapi.task_store import get_store
-from web_fastapi.runner import start_analysis
 from web_fastapi.config import build_config
 from web_fastapi import auth
 from web_fastapi.auth import Session
@@ -90,13 +89,6 @@ def create_task(
 
     store = get_store(session.user_id)
 
-    # Concurrency check
-    if store.count_running() >= user.max_concurrency:
-        raise HTTPException(
-            status_code=429,
-            detail=f"Too many concurrent tasks (max: {user.max_concurrency})",
-        )
-
     trade_date = req.trade_date or str(date.today())
 
     # Use user's defaults if not specified
@@ -115,8 +107,13 @@ def create_task(
         data_vendors=req.data_vendors,
     )
 
-    task_id = store.create_task(session.user_id, req.ticker, trade_date, config)
-    start_analysis(task_id, req.ticker, trade_date, config)
+    try:
+        task_id = store.create_task(session.user_id, req.ticker, trade_date, config)
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=429,
+            detail=str(exc),
+        )
 
     return CreateTaskResponse(
         task_id=task_id,
@@ -223,20 +220,19 @@ def rerun_task(
     # Delete old task first (in case its status is stuck on "running")
     store.delete_task(task_id)
 
-    # Now check concurrency (old task no longer counted)
-    if store.count_running() >= user.max_concurrency:
+    # create_task now handles concurrency/queue automatically
+    try:
+        new_id = store.create_task(
+            session.user_id,
+            old_task.ticker,
+            old_task.trade_date,
+            config,
+        )
+    except RuntimeError as exc:
         raise HTTPException(
             status_code=429,
-            detail=f"Too many concurrent tasks (max: {user.max_concurrency})",
+            detail=str(exc),
         )
-
-    new_id = store.create_task(
-        session.user_id,
-        old_task.ticker,
-        old_task.trade_date,
-        config,
-    )
-    start_analysis(new_id, old_task.ticker, old_task.trade_date, config)
 
     return {"task_id": new_id, "ticker": old_task.ticker, "status": "pending"}
 

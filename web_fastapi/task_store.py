@@ -122,6 +122,7 @@ class AnalysisTask:
     ticker: str
     trade_date: str
     status: str = "pending"  # "pending" | "running" | "completed" | "error" | "abort"
+    queued_at: Optional[float] = None  # timestamp when queued for later start
     error: Optional[str] = None
     tracker: ProgressTracker = field(default_factory=ProgressTracker)
     created_at: float = field(default_factory=time.time)
@@ -144,6 +145,11 @@ class TaskStore:
         self._tasks: dict[str, AnalysisTask] = {}
         self._dirty = False
         self._migrated = False  # prevents duplicate migration
+        # Queue: FIFO list of task_ids waiting for a free concurrency slot
+        self._queue: list[str] = []
+        self._dispatch_event = threading.Event()
+        self._dispatch_thread = threading.Thread(target=self._dispatch_loop, daemon=True)
+        self._dispatch_thread.start()
         self._load()
 
     # ── Persistence ────────────────────────────────────────────────────────────
@@ -155,6 +161,7 @@ class TaskStore:
             "ticker": task.ticker,
             "trade_date": task.trade_date,
             "status": task.status,
+            "queued_at": task.queued_at,
             "error": task.error,
             "created_at": task.created_at,
             "signal": task.tracker.signal,
@@ -198,6 +205,7 @@ class TaskStore:
             ticker=d["ticker"],
             trade_date=d["trade_date"],
             status=d["status"],
+            queued_at=d.get("queued_at"),
             error=d.get("error"),
             created_at=d["created_at"],
             tracker=tracker,
@@ -227,6 +235,16 @@ class TaskStore:
                 self._user_id,
                 self._tasks_file.name,
             )
+            # Recover queue: tasks with queued_at that were not started (server restart during queue)
+            recovered = 0
+            with self._lock:
+                for t in self._tasks.values():
+                    if t.queued_at is not None and t.status not in ("running", "completed", "error", "abort"):
+                        self._queue.append(t.task_id)
+                        recovered += 1
+            if recovered:
+                logger.info("Recovered %d queued tasks for user %s", recovered, self._user_id)
+                self.dispatch_queued()
         except Exception as exc:
             logger.warning("Failed to load tasks for %s: %s", self._user_id, exc)
 
@@ -306,6 +324,81 @@ class TaskStore:
         if self._dirty:
             self._save()
 
+    # ── Task queue ─────────────────────────────────────────────────────────────
+
+    def count_running(self) -> int:
+        """Count running tasks for this user."""
+        with self._lock:
+            return sum(1 for t in self._tasks.values() if t.status == "running")
+
+    def count_queued(self) -> int:
+        """Count queued tasks for this user."""
+        with self._lock:
+            return len(self._queue)
+
+    def queue_push(self, task_id: str) -> None:
+        """Add a task to the queue (caller holds _lock)."""
+        self._queue.append(task_id)
+        self._dirty = True
+
+    def queue_pop(self) -> Optional[str]:
+        """Pop the oldest task from the queue (FIFO). Returns None if empty. Caller holds _lock."""
+        if self._queue:
+            tid = self._queue.pop(0)
+            self._dirty = True
+            return tid
+        return None
+
+    def _dispatch_loop(self) -> None:
+        """Background thread: waits for dispatch signal and starts queued tasks as slots free up."""
+        while True:
+            self._dispatch_event.wait(timeout=1.0)
+            self._dispatch_event.clear()
+            # Dequeue and start tasks until queue is empty or no free slots
+            while True:
+                max_conc = self._get_max_concurrency()
+                with self._lock:
+                    running = sum(1 for t in self._tasks.values() if t.status == "running")
+                    if running >= max_conc or not self._queue:
+                        break
+                    tid = self.queue_pop()
+                    if tid is None:
+                        break
+                    task = self._tasks.get(tid)
+                    if task is None:
+                        continue
+                    task.status = "running"
+                    task.queued_at = None
+                    self._dirty = True
+                    task_config = task.config
+                    task_ticker = task.ticker
+                    task_trade_date = task.trade_date
+                # Spawn analysis thread outside the lock
+                try:
+                    from web_fastapi.runner import start_analysis
+                    start_analysis(tid, task_ticker, task_trade_date, task_config)
+                    logger.info("[%s] Queued task dispatched for user %s", tid, self._user_id)
+                except Exception as exc:
+                    logger.exception("[%s] Failed to dispatch queued task: %s", tid, exc)
+                    with self._lock:
+                        self._tasks[tid].status = "error"
+                        self._tasks[tid].error = f"Dispatch failed: {exc}"
+                        self._dirty = True
+                self._save()
+
+    def _get_max_concurrency(self) -> int:
+        """Load this user's max_concurrency from user_store (outside the lock to avoid deadlock)."""
+        try:
+            from web_fastapi.user_store import get_user_by_id
+            user = get_user_by_id(self._user_id)
+            return user.max_concurrency if user else 2
+        except Exception:
+            return 2
+
+    def dispatch_queued(self) -> None:
+        """Signal the dispatch thread to start any queued tasks. Thread-safe."""
+        self._dispatch_event.set()
+
     # ── CRUD ────────────────────────────────────────────────────────────────────
 
     def create_task(
@@ -314,8 +407,14 @@ class TaskStore:
         ticker: str,
         trade_date: str,
         config: dict,
+        max_queue_size: int = 10,
     ) -> str:
-        """Create a new analysis task and return its ID."""
+        """Create a new analysis task and start or queue it.
+
+        If a concurrency slot is free, the task starts immediately.
+        Otherwise it is queued (FIFO) up to max_queue_size tasks.
+        Raises RuntimeError if both slots and queue are full.
+        """
         task_id = str(uuid.uuid4())[:8]
         task = AnalysisTask(
             task_id=task_id,
@@ -329,7 +428,28 @@ class TaskStore:
         with self._lock:
             self._tasks[task_id] = task
             self._dirty = True
+            running = sum(1 for t in self._tasks.values() if t.status == "running")
+            max_conc = self._get_max_concurrency()
+            if running < max_conc:
+                # Start immediately
+                task.status = "running"
+                task_config = config
+                task_ticker = ticker
+                task_trade_date = trade_date
+            elif len(self._queue) < max_queue_size:
+                # Queue for later
+                task.queued_at = time.time()
+                self._queue.append(task_id)
+                logger.info("[%s] Task queued (slot full) for user %s", task_id, user_id)
+                self._save()
+                return task_id
+            else:
+                # Queue full — caller should reject with 429
+                raise RuntimeError(f"Queue full (max {max_queue_size})")
         self._save()
+        if task.status == "running":
+            from web_fastapi.runner import start_analysis
+            start_analysis(task_id, task_ticker, task_trade_date, task_config)
         return task_id
 
     def get_task(self, task_id: str) -> Optional[AnalysisTask]:
@@ -351,6 +471,9 @@ class TaskStore:
                 self._dirty = True
         if self._dirty:
             self._save()
+        # When a running task finishes, free up a slot for queued tasks
+        if status in ("completed", "error", "abort"):
+            self.dispatch_queued()
 
     def update_completed(
         self,
@@ -371,6 +494,7 @@ class TaskStore:
                 self._dirty = True
         if self._dirty:
             self._save()
+        self.dispatch_queued()
 
     def list_tasks(self, page: int = 1, page_size: int = 20) -> dict:
         """List tasks for this user, with pagination."""
@@ -404,13 +528,19 @@ class TaskStore:
         }
 
     def delete_task(self, task_id: str) -> bool:
-        """Delete a task."""
+        """Delete a task. Returns True if the task was deleted."""
         with self._lock:
             if task_id not in self._tasks:
                 return False
+            was_running = self._tasks[task_id].status == "running"
+            # Remove from queue if queued
+            if task_id in self._queue:
+                self._queue.remove(task_id)
             del self._tasks[task_id]
             self._dirty = True
         self._save()
+        if was_running:
+            self.dispatch_queued()
         return True
 
     def abort_task(self, task_id: str, reason: str = "任务被手动终止") -> bool:
@@ -422,9 +552,5 @@ class TaskStore:
             self._tasks[task_id].error = reason
             self._dirty = True
         self._save()
+        self.dispatch_queued()
         return True
-
-    def count_running(self) -> int:
-        """Count running tasks for this user."""
-        with self._lock:
-            return sum(1 for t in self._tasks.values() if t.status == "running")
