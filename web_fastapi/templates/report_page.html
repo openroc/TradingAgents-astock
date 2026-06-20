@@ -29,32 +29,32 @@
   </div>
 
   {# ── Compact Stats ── #}
-  <div class="flex flex-wrap gap-2 items-center">
-    <div class="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-center min-w-[72px]">
-      <div id="stat-llm" class="text-lg font-bold text-emerald-400">{{ llm_calls }}</div>
-      <div class="text-xs text-gray-500">LLM</div>
+  <div class="flex flex-wrap gap-2 items-center font-variant-numeric: tabular-nums">
+    <div class="bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-center min-w-[72px] h-10 flex flex-col justify-center">
+      <div id="stat-llm" class="text-base font-semibold text-emerald-400 leading-none">{{ llm_calls }}</div>
+      <div class="text-xs text-gray-500 leading-none mt-0.5">LLM</div>
     </div>
-    <div class="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-center min-w-[72px]">
-      <div id="stat-tools" class="text-lg font-bold text-blue-400">{{ tool_calls }}</div>
-      <div class="text-xs text-gray-500">工具</div>
+    <div class="bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-center min-w-[72px] h-10 flex flex-col justify-center">
+      <div id="stat-tools" class="text-base font-semibold text-blue-400 leading-none">{{ tool_calls }}</div>
+      <div class="text-xs text-gray-500 leading-none mt-0.5">工具</div>
     </div>
-    <div class="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-center min-w-[80px]">
-      <div id="stat-tokens-in" class="text-lg font-bold text-purple-400">{{ tokens_in }}</div>
-      <div class="text-xs text-gray-500">Token↑</div>
+    <div class="bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-center min-w-[80px] h-10 flex flex-col justify-center">
+      <div id="stat-tokens-in" class="text-base font-semibold text-purple-400 leading-none">{% if tokens_in >= 1000000 %}{{ '%.1fM'|format(tokens_in/1000000) }}{% elif tokens_in >= 10000 %}{{ '%.1fW'|format(tokens_in/10000) }}{% elif tokens_in >= 1000 %}{{ '%.1fK'|format(tokens_in/1000) }}{% else %}{{ tokens_in }}{% endif %}</div>
+      <div class="text-xs text-gray-500 leading-none mt-0.5">输入↑</div>
     </div>
-    <div class="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-center min-w-[80px]">
-      <div id="stat-tokens-out" class="text-lg font-bold text-orange-400">{{ tokens_out }}</div>
-      <div class="text-xs text-gray-500">Token↓</div>
+    <div class="bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-center min-w-[80px] h-10 flex flex-col justify-center">
+      <div id="stat-tokens-out" class="text-base font-semibold text-orange-400 leading-none">{% if tokens_out >= 1000000 %}{{ '%.1fM'|format(tokens_out/1000000) }}{% elif tokens_out >= 10000 %}{{ '%.1fW'|format(tokens_out/10000) }}{% elif tokens_out >= 1000 %}{{ '%.1fK'|format(tokens_out/1000) }}{% else %}{{ tokens_out }}{% endif %}</div>
+      <div class="text-xs text-gray-500 leading-none mt-0.5">输出↓</div>
     </div>
-    <div class="bg-gray-900 border border-yellow-700/40 rounded-lg px-3 py-2 text-center min-w-[88px]">
-      <div id="stat-cost" class="text-lg font-bold text-yellow-400">{% if task_cost and task_cost > 0 %}{{ '%.2f'|format(task_cost) }}{% else %}-{% endif %}</div>
-      <div class="text-xs text-gray-500">¥费用</div>
+    <div class="bg-gray-900 border border-yellow-700/40 rounded-lg px-3 py-1.5 text-center min-w-[80px] h-10 flex flex-col justify-center">
+      <div id="stat-cost" class="text-base font-semibold text-yellow-400 leading-none">{% if task_cost and task_cost > 0 %}{{ '%.2f'|format(task_cost) }}{% else %}-{% endif %}</div>
+      <div class="text-xs text-gray-500 leading-none mt-0.5">¥费用</div>
     </div>
     {% if status == 'completed' %}
-    <a href="/report/{{ task_id }}/markdown" class="text-sm bg-gray-800 hover:bg-gray-700 px-3 py-2 rounded-lg transition">📄 MD</a>
-    <a href="/report/{{ task_id }}/pdf" class="text-sm bg-gray-800 hover:bg-gray-700 px-3 py-2 rounded-lg transition">📕 PDF</a>
+    <a href="/report/{{ task_id }}/markdown" class="text-sm bg-gray-800 hover:bg-gray-700 px-3 py-1.5 rounded-lg transition h-10 flex items-center">📄 MD</a>
+    <a href="/report/{{ task_id }}/pdf" class="text-sm bg-gray-800 hover:bg-gray-700 px-3 py-1.5 rounded-lg transition h-10 flex items-center">📕 PDF</a>
     <button type="button" onclick="if(confirm('确定删除此任务？删除后可重新发起。'))document.getElementById('delete-form').submit()"
-            class="text-sm bg-gray-800 hover:bg-red-700 text-white px-3 py-2 rounded-lg transition cursor-pointer">🗑</button>
+            class="text-sm bg-gray-800 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg transition cursor-pointer h-10 flex items-center">🗑</button>
     {% endif %}
   </div>
 </div>
@@ -77,11 +77,11 @@
   </div>
   <div id="run-stages" class="flex flex-wrap gap-2 mb-3"></div>
   <div class="flex gap-2">
-    <button id="btn-rerun" class="bg-red-700 hover:bg-red-600 text-white px-4 py-1.5 rounded-lg text-xs transition">
+    <button id="btn-rerun" class="bg-red-700 hover:bg-red-600 text-white h-10 px-4 rounded-lg text-sm transition flex items-center">
       🔄 重新开始
     </button>
     <button type="button" onclick="if(confirm('确定删除此任务？'))document.getElementById('delete-form').submit()"
-            class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-1.5 rounded-lg text-xs transition cursor-pointer">
+            class="bg-gray-700 hover:bg-gray-600 text-white h-10 px-4 rounded-lg text-sm transition cursor-pointer flex items-center">
       🗑 删除
     </button>
   </div>
@@ -205,16 +205,24 @@ function updateRunningPanel(data) {
 }
 
 // ── Update stats (header + stat bar) ───────────────────────────────────
+function fmtNum(n) {
+  if (n == null || isNaN(n)) return '0';
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e4) return (n / 1e4).toFixed(1) + 'W';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  return String(Math.round(n));
+}
+
 function updateStats(data) {
   document.getElementById('hdr-elapsed').textContent = (data.elapsed || 0) + 's';
-  document.getElementById('stat-llm').textContent = data.llm_calls || 0;
-  document.getElementById('stat-tools').textContent = data.tool_calls || 0;
-  document.getElementById('stat-tokens-in').textContent = data.tokens_in || 0;
-  document.getElementById('stat-tokens-out').textContent = data.tokens_out || 0;
+  document.getElementById('stat-llm').textContent = fmtNum(data.llm_calls);
+  document.getElementById('stat-tools').textContent = fmtNum(data.tool_calls);
+  document.getElementById('stat-tokens-in').textContent = fmtNum(data.tokens_in);
+  document.getElementById('stat-tokens-out').textContent = fmtNum(data.tokens_out);
   // Update cost when polling returns completed task data
   const costEl = document.getElementById('stat-cost');
   if (data.cost != null && data.cost > 0) {
-    costEl.textContent = '¥ ' + parseFloat(data.cost).toFixed(4);
+    costEl.textContent = '¥' + parseFloat(data.cost).toFixed(2);
   } else if (data.status === 'completed') {
     // Compute from tokens if cost not yet available
     const tIn = data.tokens_in || 0;
@@ -223,7 +231,7 @@ function updateStats(data) {
     const inP = parseFloat(document.body.dataset.inputPrice || 2.10);
     const outP = parseFloat(document.body.dataset.outputPrice || 8.40);
     const computed = ((tIn / 1_000_000) * inP + (tOut / 1_000_000) * outP);
-    costEl.textContent = computed > 0 ? '¥ ' + computed.toFixed(4) : '-';
+    costEl.textContent = computed > 0 ? '¥' + computed.toFixed(2) : '-';
   }
 
   if (data.signal) {
