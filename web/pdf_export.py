@@ -121,8 +121,11 @@ class _ReportPDF(FPDF):
 
         font_path = _find_cjk_font()
         if font_path:
-            self.add_font("CJK", "", font_path)
-            self.add_font("CJK", "B", font_path)
+            try:
+                self.add_font("CJK", "", font_path)
+                self.add_font("CJK", "B", font_path)
+            except ValueError:
+                pass
             self._has_cjk = True
 
     def _use_font(self, style: str = "", size: int = 10) -> None:

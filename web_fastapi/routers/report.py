@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from urllib.parse import quote
+
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
@@ -242,7 +244,7 @@ def download_markdown(
         content=markdown,
         media_type="text/markdown; charset=utf-8",
         headers={
-            "Content-Disposition": f'attachment; filename="{task.ticker}_{task.trade_date}.md"'
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(f'{task.ticker}_{task.trade_date}.md')}"
         },
     )
 
@@ -274,5 +276,5 @@ def download_pdf(
     return StreamingResponse(
         iter([pdf_bytes]),
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
     )

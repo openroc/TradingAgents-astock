@@ -35,6 +35,8 @@
     {% if status == 'completed' %}
     <a href="/report/{{ task_id }}/markdown" class="text-sm bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg transition">📄 MD</a>
     <a href="/report/{{ task_id }}/pdf" class="text-sm bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg transition">📕 PDF</a>
+    <button type="button" onclick="if(confirm('确定删除此任务？删除后可重新发起。'))document.getElementById('delete-form').submit()"
+            class="text-sm bg-gray-800 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition cursor-pointer">🗑 删除</button>
     {% endif %}
   </div>
 </div>
