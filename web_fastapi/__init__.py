@@ -1,1 +1,1 @@
-# XT投研辅助系统 FastAPI Web Application
+# XT FastAPI Web Application
