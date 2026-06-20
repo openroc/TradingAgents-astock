@@ -115,8 +115,10 @@ def _delete_session(token: str) -> None:
 
 def login(username: str, password: str) -> Session:
     """Authenticate user and return a session. Raises HTTPException on failure."""
+    from web_fastapi import user_store
     from web_fastapi.user_store import verify_password
 
+    user_store._load()  # reload from disk so password resets take effect without server restart
     user = get_user_by_username(username)
     if user is None:
         raise HTTPException(

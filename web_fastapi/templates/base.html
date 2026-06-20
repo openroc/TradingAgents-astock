@@ -27,8 +27,10 @@
 
       {# Desktop nav #}
       <div id="nav-desktop" class="hidden sm:flex items-center gap-6 text-sm text-gray-400">
-        <a href="/" class="hover:text-emerald-400 transition">发起分析</a>
-        <a href="/tasks" class="hover:text-emerald-400 transition">任务列表</a>
+        <span id="nav-actions-desktop" class="hidden items-center gap-6">
+          <a href="/" class="hover:text-emerald-400 transition">发起分析</a>
+          <a href="/tasks" class="hover:text-emerald-400 transition">任务列表</a>
+        </span>
         <span id="nav-user-desktop" class="hidden items-center gap-3">
           <a href="/settings" class="hover:text-blue-400 transition">个人设置</a>
           <a href="/auth/change-password" class="hover:text-yellow-400 transition">修改密码</a>
@@ -51,8 +53,10 @@
 
     {# Mobile menu #}
     <div id="nav-mobile" class="hidden sm:hidden px-4 pb-4 flex flex-col gap-3 text-sm text-gray-400 border-t border-gray-800 pt-3">
-      <a href="/" class="hover:text-emerald-400 transition">发起分析</a>
-      <a href="/tasks" class="hover:text-emerald-400 transition">任务列表</a>
+      <span id="nav-actions-mobile" class="hidden flex-col gap-3">
+        <a href="/" class="hover:text-emerald-400 transition">发起分析</a>
+        <a href="/tasks" class="hover:text-emerald-400 transition">任务列表</a>
+      </span>
       <span id="nav-user-mobile" class="hidden flex-col gap-3">
         <a href="/settings" class="hover:text-blue-400 transition">个人设置</a>
         <a href="/auth/change-password" class="hover:text-yellow-400 transition">修改密码</a>
@@ -78,6 +82,12 @@
       .then(r => r.ok ? r.json() : null)
       .then(user => {
         if (user) {
+          // Show action links (发起分析 / 任务列表)
+          document.getElementById('nav-actions-desktop').classList.remove('hidden');
+          document.getElementById('nav-actions-desktop').classList.add('flex');
+          document.getElementById('nav-actions-mobile').classList.remove('hidden');
+          document.getElementById('nav-actions-mobile').classList.add('flex');
+          // Show user info
           document.getElementById('nav-username').textContent = user.username;
           document.getElementById('nav-username-mobile').textContent = user.username;
           document.getElementById('nav-user-desktop').classList.remove('hidden');

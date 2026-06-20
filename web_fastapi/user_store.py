@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 import logging
 import uuid
 from dataclasses import dataclass, field
@@ -121,6 +122,15 @@ def _load() -> None:
 
 def _save() -> None:
     _init_data_dir()
+    # Backup current content before saving
+    if _USERS_FILE.exists():
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path = _DATA_DIR / f"users_{ts}.json"
+        try:
+            backup_path.write_text(_USERS_FILE.read_text(encoding="utf-8"), encoding="utf-8")
+            logger.info("Backed up users to %s", backup_path.name)
+        except OSError as exc:
+            logger.warning("Failed to backup users: %s", exc)
     try:
         with _lock:
             users_list = [
@@ -190,6 +200,7 @@ def create_user(
     output_price_per_million: float = 8.40,
 ) -> User:
     """Create a new user. Raises ValueError if username already exists."""
+    _load()  # reload from disk so all concurrent processes stay in sync
     if get_user_by_username(username) is not None:
         raise ValueError(f"Username '{username}' already exists")
     user = User(
@@ -221,6 +232,7 @@ def update_user(
     output_price_per_million: Optional[float] = None,
 ) -> Optional[User]:
     """Update user fields. Returns None if user not found."""
+    _load()  # reload from disk so all concurrent processes stay in sync
     with _lock:
         user = _users.get(user_id)
         if user is None:
@@ -245,6 +257,7 @@ def update_user(
 
 def delete_user(user_id: str) -> bool:
     """Delete a user. Returns False if not found."""
+    _load()  # reload from disk so all concurrent processes stay in sync
     with _lock:
         if user_id not in _users:
             return False

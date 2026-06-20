@@ -30,6 +30,8 @@ router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 @router.get("", include_in_schema=False)
 def tasks_page(request: Request):
+    """Serve the tasks list page (requires auth)."""
+    auth.get_current_user(request)
     return _templates.TemplateResponse(request, "tasks_list.html", {"request": request})
 
 

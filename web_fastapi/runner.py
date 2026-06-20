@@ -71,18 +71,29 @@ def run_analysis(task_id: str, ticker: str, trade_date: str, config: dict) -> No
 
         _save_report_to_disk(last_chunk, ticker, trade_date)
 
-        # Record billing (uses model pricing from models.json)
+        # Record billing (user pricing from users.json, fallback to models.json)
         task_cost = None
         try:
+            from web_fastapi import user_store as user_store_module
             from web_fastapi.billing_store import get_billing_store
+            from web_fastapi.user_store import get_user_by_id
             billing = get_billing_store(task.user_id)
             model_name = task.config.get("deep_think_llm", "unknown")
+            user_store_module._load()  # reload so user pricing changes take effect without restart
+            user = get_user_by_id(task.user_id)
+            user_pricing = None
+            if user and user.input_price_per_million and user.output_price_per_million:
+                user_pricing = {
+                    "input_price_per_million": user.input_price_per_million,
+                    "output_price_per_million": user.output_price_per_million,
+                }
             task_cost = billing.record_task(
                 task_id=task_id,
                 ticker=ticker,
                 tokens_in=task.tracker.tokens_in,
                 tokens_out=task.tracker.tokens_out,
                 model_name=model_name,
+                user_pricing=user_pricing,
             )
         except Exception as exc:
             logger.warning("[%s] Failed to record billing: %s", task_id, exc)
@@ -101,15 +112,26 @@ def run_analysis(task_id: str, ticker: str, trade_date: str, config: dict) -> No
 
         # Record billing even for failed tasks (tokens were consumed)
         try:
+            from web_fastapi import user_store as user_store_module
             from web_fastapi.billing_store import get_billing_store
+            from web_fastapi.user_store import get_user_by_id
             billing = get_billing_store(task.user_id)
             model_name = task.config.get("deep_think_llm", "unknown")
+            user_store_module._load()  # reload so user pricing changes take effect without restart
+            user = get_user_by_id(task.user_id)
+            user_pricing = None
+            if user and user.input_price_per_million and user.output_price_per_million:
+                user_pricing = {
+                    "input_price_per_million": user.input_price_per_million,
+                    "output_price_per_million": user.output_price_per_million,
+                }
             billing.record_task(
                 task_id=task_id,
                 ticker=ticker,
                 tokens_in=task.tracker.tokens_in,
                 tokens_out=task.tracker.tokens_out,
                 model_name=model_name,
+                user_pricing=user_pricing,
             )
         except Exception as billing_exc:
             logger.warning("[%s] Failed to record billing for failed task: %s", task_id, billing_exc)

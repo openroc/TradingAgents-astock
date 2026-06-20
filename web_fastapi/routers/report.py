@@ -79,13 +79,20 @@ async def view_report(
     if task_cost is None:
         try:
             from web_fastapi.model_pricing import get_model_pricing
+            from web_fastapi.user_store import get_user_by_id
             model_name = task.config.get("deep_think_llm", "MiniMax-M2.7")
-            pricing = get_model_pricing(model_name)
-            input_price = pricing["input_price_per_million"]
-            output_price = pricing["output_price_per_million"]
             tokens_in = task.tracker.tokens_in or 0
             tokens_out = task.tracker.tokens_out or 0
-            weight = pricing.get("weight", 1.0)
+            user = get_user_by_id(session.user_id)
+            if user and user.input_price_per_million and user.output_price_per_million:
+                input_price = user.input_price_per_million
+                output_price = user.output_price_per_million
+                weight = 1.0
+            else:
+                pricing = get_model_pricing(model_name)
+                input_price = pricing["input_price_per_million"]
+                output_price = pricing["output_price_per_million"]
+                weight = pricing.get("weight", 1.0)
             task_cost = round(
                 ((tokens_in / 1_000_000) * input_price +
                  (tokens_out / 1_000_000) * output_price) * weight,

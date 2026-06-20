@@ -91,19 +91,24 @@ class BillingStore:
         tokens_in: int,
         tokens_out: int,
         model_name: str,
+        user_pricing: dict | None = None,
     ) -> float | None:
         """Record a completed task and return its computed cost.
 
-        Pricing is looked up from models.json by model_name. The cost is added
-        to the cumulative total. Returns the per-task cost, or None if the
-        task was already recorded (idempotent — safe to call multiple times).
+        If user_pricing is provided (input_price_per_million / output_price_per_million
+        from users.json), it takes precedence. Otherwise falls back to models.json.
         """
         from web_fastapi.model_pricing import get_model_pricing
 
-        pricing = get_model_pricing(model_name)
-        input_price = pricing["input_price_per_million"]
-        output_price = pricing["output_price_per_million"]
-        weight = pricing.get("weight", 1.0)
+        if user_pricing is not None:
+            input_price = user_pricing["input_price_per_million"]
+            output_price = user_pricing["output_price_per_million"]
+            weight = user_pricing.get("weight", 1.0)
+        else:
+            pricing = get_model_pricing(model_name)
+            input_price = pricing["input_price_per_million"]
+            output_price = pricing["output_price_per_million"]
+            weight = pricing.get("weight", 1.0)
 
         input_cost = (tokens_in / 1_000_000) * input_price
         output_cost = (tokens_out / 1_000_000) * output_price

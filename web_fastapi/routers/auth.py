@@ -74,6 +74,8 @@ def logout(request: Request):
 def me(request: Request):
     """Return current user info (requires auth)."""
     session = get_current_user(request)
+    from web_fastapi import user_store
+    user_store._load()  # reload so user pricing changes take effect without restart
     user = get_user_by_id(session.user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
@@ -82,18 +84,26 @@ def me(request: Request):
         from web_fastapi.model_pricing import get_model_pricing
         billing = get_billing_store(session.user_id)
         cumulative_cost = billing.get_cumulative_cost()
-        model_pricing = get_model_pricing(user.default_model)
+        # Prefer user's custom pricing, fallback to models.json
+        if user.input_price_per_million is not None and user.output_price_per_million is not None:
+            input_price = user.input_price_per_million
+            output_price = user.output_price_per_million
+        else:
+            model_pricing = get_model_pricing(user.default_model)
+            input_price = model_pricing["input_price_per_million"]
+            output_price = model_pricing["output_price_per_million"]
     except Exception:
         cumulative_cost = 0.0
-        model_pricing = {"input_price_per_million": 2.10, "output_price_per_million": 8.40}
+        input_price = 2.10
+        output_price = 8.40
     return {
         "user_id": session.user_id,
         "username": session.username,
         "is_admin": session.is_admin,
         "cumulative_cost": cumulative_cost,
         "default_model": user.default_model,
-        "input_price_per_million": model_pricing["input_price_per_million"],
-        "output_price_per_million": model_pricing["output_price_per_million"],
+        "input_price_per_million": input_price,
+        "output_price_per_million": output_price,
     }
 
 

@@ -1370,5 +1370,40 @@ def users_reset_password(
         raise typer.Exit(1)
 
 
+@users_app.command("token")
+def users_token(
+    username: str = typer.Argument(..., help="Username to update pricing for"),
+    input_price: float = typer.Argument(..., help="Input price per million tokens (¥)"),
+    output_price: float = typer.Argument(..., help="Output price per million tokens (¥)"),
+):
+    """Set a user's token pricing (¥ per million tokens)."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from web_fastapi.user_store import get_user_by_username, update_user
+
+    if input_price < 0 or output_price < 0:
+        console.print("[red]Error:[/red] Prices must be non-negative.")
+        raise typer.Exit(1)
+
+    user = get_user_by_username(username)
+    if user is None:
+        console.print(f"[red]Error:[/red] User '{username}' not found.")
+        raise typer.Exit(1)
+
+    updated = update_user(
+        user.id,
+        input_price_per_million=input_price,
+        output_price_per_million=output_price,
+    )
+    if updated:
+        console.print(
+            f"[green]Token pricing updated for '{username}':[/green] "
+            f"输入 ¥{input_price}/M · 输出 ¥{output_price}/M"
+        )
+    else:
+        console.print(f"[red]Error:[/red] Failed to update pricing for '{username}'.")
+        raise typer.Exit(1)
+
+
 if __name__ == "__main__":
     app()
