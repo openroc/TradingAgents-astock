@@ -231,6 +231,5 @@ __marimo__/
 **/data_cache/
 
 # FastAPI data (runtime user data, do not commit)
-web_fastapi/data/
 web_fastapi/__pycache__/
 web_fastapi/routers/__pycache__/

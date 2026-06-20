@@ -11,7 +11,7 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-_DATA_DIR = Path(__file__).parent / "data"
+_DATA_DIR = Path(__file__).parent.parent / "userdata"
 _USERS_FILE = _DATA_DIR / "users.json"
 
 _DEFAULT_ADMIN_PASSWORD = "admin"  # change after first login

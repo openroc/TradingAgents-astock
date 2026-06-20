@@ -33,7 +33,7 @@ def _strip_lc_message(obj: Any) -> Any:
 
 # ── Data directory ──────────────────────────────────────────────────────────────
 
-_DATA_DIR = Path(__file__).parent / "data"
+_DATA_DIR = Path(__file__).parent.parent / "userdata"
 _OLD_TASKS_FILE = _DATA_DIR / "tasks.json"
 
 

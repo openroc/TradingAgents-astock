@@ -19,7 +19,7 @@ from web_fastapi.user_store import User, get_user_by_username
 # ── Session store (persisted to disk) ─────────────────────────────────────────
 
 SESSION_EXPIRE_SECONDS = 24 * 3600  # 24 hours
-_DATA_DIR = Path(__file__).parent / "data"
+_DATA_DIR = Path(__file__).parent.parent / "userdata"
 _SESSIONS_FILE = _DATA_DIR / "sessions.json"
 _session_store: dict[str, dict] = {}
 _session_lock = threading.Lock()
