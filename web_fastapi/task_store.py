@@ -533,7 +533,11 @@ class TaskStore:
                 "error": t.error,
                 "signal": t.tracker.signal,
                 "created_at": t.created_at,
-                "elapsed": t.total_elapsed if t.total_elapsed is not None else t.tracker.elapsed,
+                "elapsed": (
+                    t.total_elapsed
+                    if t.total_elapsed is not None
+                    else t.tracker.elapsed if t.status in ("running", "completed") else 0
+                ),
                 "cost": t.cost,
             })
         return {

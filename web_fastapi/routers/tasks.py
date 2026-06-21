@@ -200,6 +200,11 @@ def get_task_status(
 
     tracker = task.tracker
     report_url = f"/report/{task_id}" if task.status == "completed" else None
+    elapsed = (
+        task.total_elapsed
+        if task.total_elapsed is not None
+        else tracker.elapsed if task.status in ("running", "completed") else 0
+    )
 
     return TaskStatusResponse(
         task_id=task_id,
@@ -215,7 +220,7 @@ def get_task_status(
         tool_calls=tracker.tool_calls,
         tokens_in=tracker.tokens_in,
         tokens_out=tracker.tokens_out,
-        elapsed_seconds=round(tracker.elapsed, 1),
+        elapsed_seconds=round(elapsed, 1),
         cost=task.cost,
         report_url=report_url,
     )
