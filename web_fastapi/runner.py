@@ -66,8 +66,8 @@ def run_analysis(task_id: str, ticker: str, trade_date: str, config: dict) -> No
 
         report_summary = {
             "signal": signal,
-            "market_report": last_chunk.get("market_report", "")[:500],
-            "final_decision": last_chunk.get("final_trade_decision", "")[:1000],
+            "market_report": (last_chunk.get("market_report") or "")[:500],
+            "final_decision": (last_chunk.get("final_trade_decision") or "")[:1000],
         }
 
         _save_report_to_disk(last_chunk, ticker, trade_date)
