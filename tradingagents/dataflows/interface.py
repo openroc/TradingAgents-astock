@@ -226,5 +226,9 @@ def route_to_vendor(method: str, *args, **kwargs):
             return impl_func(*args, **kwargs)
         except AlphaVantageRateLimitError:
             continue  # Only rate limits trigger fallback
+        except ValueError as exc:
+            # Invalid input (e.g. LLM passes a non-stock string as ticker).
+            # Return error message so the LLM can see it and retry.
+            return f"[Error] {exc}"
 
     raise RuntimeError(f"No available vendor for '{method}'")
