@@ -10,15 +10,16 @@ back gracefully to free-text generation.
 
 from __future__ import annotations
 
+import logging
+
 from tradingagents.agents.schemas import PortfolioDecision, render_pm_decision
 from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
     get_language_instruction,
 )
-from tradingagents.agents.utils.structured import (
-    bind_structured,
-    invoke_structured_or_freetext,
-)
+from tradingagents.agents.utils.structured import bind_structured
+
+logger = logging.getLogger(__name__)
 
 
 def create_portfolio_manager(llm):
@@ -73,16 +74,34 @@ def create_portfolio_manager(llm):
 
 Be decisive and ground every conclusion in specific evidence from the analysts.{get_language_instruction()}"""
 
-        final_trade_decision = invoke_structured_or_freetext(
-            structured_llm,
-            llm,
-            prompt,
-            render_pm_decision,
-            "Portfolio Manager",
-        )
+        # Attempt structured output first; fall back to free text on failure
+        try:
+            decision: PortfolioDecision | str = structured_llm.invoke(prompt)
+        except Exception as exc:
+            logger.warning(
+                "Portfolio Manager: structured-output invocation failed (%s); "
+                "retrying once as free text",
+                exc,
+            )
+            response = llm.invoke(prompt)
+            decision = getattr(response, "content", str(response))
+
+        # Render the PM's final decision to markdown (used in PM tab and memory log)
+        if isinstance(decision, PortfolioDecision):
+            final_trade_decision = render_pm_decision(decision)
+            # judge_decision: the PM's risk assessment of the debate,
+            # derived from the structured fields — distinct from the full investment plan
+            judge_decision = (
+                f"**Rating**: {decision.rating.value}\n\n"
+                f"**Investment Thesis**:\n{decision.investment_thesis}"
+            )
+        else:
+            # Free-text fallback: two outputs are identical (no structured fields to split)
+            final_trade_decision = decision
+            judge_decision = decision
 
         new_risk_debate_state = {
-            "judge_decision": final_trade_decision,
+            "judge_decision": judge_decision,
             "history": risk_debate_state["history"],
             "aggressive_history": risk_debate_state["aggressive_history"],
             "conservative_history": risk_debate_state["conservative_history"],
