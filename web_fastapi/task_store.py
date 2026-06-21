@@ -377,6 +377,7 @@ class TaskStore:
                     task.status = "running"
                     task.queued_at = None
                     self._dirty = True
+                    self._save()       # _save() must be called while _lock is held
                     task_config = task.config
                     task_ticker = task.ticker
                     task_trade_date = task.trade_date
@@ -391,7 +392,7 @@ class TaskStore:
                         self._tasks[tid].status = "error"
                         self._tasks[tid].error = f"Dispatch failed: {exc}"
                         self._dirty = True
-                self._save()
+                        self._save()
 
     def _get_max_concurrency(self) -> int:
         """Load this user's max_concurrency from user_store (outside the lock to avoid deadlock)."""

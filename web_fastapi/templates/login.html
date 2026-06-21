@@ -56,7 +56,11 @@ form.addEventListener('submit', async (e) => {
     if (resp.ok) {
       const data = await resp.json();
       if (data.token) localStorage.setItem('session_token', data.token);
-      window.location.href = '/tasks';
+      if (data.must_change_password) {
+        window.location.href = '/auth/change-password?force=1';
+      } else {
+        window.location.href = '/tasks';
+      }
     } else {
       const err = await resp.json().catch(() => ({ detail: 'Login failed' }));
       errorMsg.textContent = err.detail || '登录失败';

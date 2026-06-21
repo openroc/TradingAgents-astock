@@ -158,7 +158,7 @@ def root(request: Request):
 # ── Health check ─────────────────────────────────────────────────────────────
 @app.get("/health", tags=["system"])
 def health():
-    return {"status": "ok", "service": "XT系统"}
+    return {"status": "ok"}
 
 
 if __name__ == "__main__":

@@ -75,12 +75,12 @@ class BillingStore:
                     "cumulative_cost": self._cumulative_cost,
                     "records": self._records,
                 }
-            tmp_path = self._file.with_suffix(".tmp")
-            tmp_path.write_text(
-                json.dumps(data, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-            tmp_path.replace(self._file)
+                tmp_path = self._file.with_suffix(".tmp")
+                tmp_path.write_text(
+                    json.dumps(data, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+                tmp_path.replace(self._file)
         except Exception as exc:
             logger.warning("Failed to persist billing for %s: %s", self._user_id, exc)
 

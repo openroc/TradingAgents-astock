@@ -24,6 +24,7 @@ class User:
     username: str
     password_hash: str
     is_admin: bool = False
+    must_change_password: bool = False   # True for default admin until password is changed
     max_concurrency: int = 2
     default_model: str = "MiniMax-M2.7"
     default_provider: str = "oneapi"
@@ -107,6 +108,7 @@ def _load() -> None:
                     username=d["username"],
                     password_hash=d["password_hash"],
                     is_admin=d.get("is_admin", False),
+                    must_change_password=d.get("must_change_password", False),
                     max_concurrency=d.get("max_concurrency", 2),
                     default_model=d.get("default_model", "MiniMax-M2.7"),
                     default_provider=d.get("default_provider", "oneapi"),
@@ -139,6 +141,7 @@ def _save() -> None:
                     "username": u.username,
                     "password_hash": u.password_hash,
                     "is_admin": u.is_admin,
+                    "must_change_password": u.must_change_password,
                     "max_concurrency": u.max_concurrency,
                     "default_model": u.default_model,
                     "default_provider": u.default_provider,
@@ -167,6 +170,7 @@ def _create_default_users() -> None:
         username="admin",
         password_hash=hash_password(_DEFAULT_ADMIN_PASSWORD),
         is_admin=True,
+        must_change_password=True,
         max_concurrency=10,
         default_model="MiniMax-M2.7",
         default_provider="oneapi",
@@ -244,6 +248,7 @@ def update_user(
             return None
         if password is not None:
             user.password_hash = hash_password(password)
+            user.must_change_password = False   # password change satisfies the requirement
         if is_admin is not None:
             user.is_admin = is_admin
         if max_concurrency is not None:

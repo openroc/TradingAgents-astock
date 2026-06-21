@@ -39,6 +39,10 @@ def _init_sessions():
             logger.info(f"Loaded {len(_session_store)} active sessions from disk")
         except Exception as exc:
             logger.warning(f"Could not load sessions from disk: {exc}")
+        logger.warning(
+            "Sessions are stored in-process memory. "
+            "Do NOT run multiple uvicorn workers — sessions will not be shared across processes."
+        )
 
 
 def _save_sessions():
@@ -61,6 +65,7 @@ class Session:
     username: str
     is_admin: bool
     expires_at: float
+    must_change_password: bool = False   # set dynamically after auth
 
     def is_expired(self) -> bool:
         return time.time() > self.expires_at
@@ -131,7 +136,10 @@ def login(username: str, password: str) -> Session:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
         )
-    return _create_session(user)
+    session = _create_session(user)
+    if user.must_change_password:
+        session.must_change_password = True
+    return session
 
 
 def logout(token: str) -> None:
