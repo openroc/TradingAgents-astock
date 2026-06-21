@@ -36,6 +36,8 @@ def parse_rating(text: str, default: str = "Hold") -> str:
 
     Returns a Title-cased rating string, or ``default`` if no rating word appears.
     """
+    if not text:
+        return default
     for line in text.splitlines():
         m = _RATING_LABEL_RE.search(line)
         if m and m.group(1).lower() in _RATING_SET:
