@@ -201,12 +201,10 @@ def _update_tracker(chunk: dict, tracker) -> None:
     tracker.current_stage = active
 
 
-def _strip(text: str) -> str:
-    """Strip LlamaIndex/LangChain debug artifacts from LLM output."""
-    if not text:
-        return ""
+def _strip_think_tags(text: str) -> str:
+    """Strip LlamaIndex/LangChain debug blocks from LLM output."""
     import re
-    return re.sub(r"<THINKOPEN>.*?</THINKCLOSE>", "", text, flags=re.DOTALL).strip()
+    return re.sub(r"\x03.*?\x03\s*", "", text, flags=re.DOTALL).strip()
 
 
 def start_analysis(task_id: str, ticker: str, trade_date: str, config: dict) -> threading.Thread:

@@ -52,23 +52,31 @@ async def view_report(
     state = task.final_state or getattr(task.tracker, "final_state", None)
     signal = task.tracker.signal or ""
 
+    inv_debate = state.get("investment_debate_state", {}) if state else {}
+    risk_debate = state.get("risk_debate_state", {}) if state else {}
+
     reports = {
-        "market_report":         _to_str(state.get("market_report")) if state else "",
-        "sentiment_report":      _to_str(state.get("sentiment_report")) if state else "",
-        "news_report":           _to_str(state.get("news_report")) if state else "",
-        "fundamentals_report":   _to_str(state.get("fundamentals_report")) if state else "",
-        "policy_report":         _to_str(state.get("policy_report")) if state else "",
-        "hot_money_report":      _to_str(state.get("hot_money_report")) if state else "",
-        "lockup_report":         _to_str(state.get("lockup_report")) if state else "",
+        "market_report":          _to_str(state.get("market_report")) if state else "",
+        "sentiment_report":       _to_str(state.get("sentiment_report")) if state else "",
+        "news_report":            _to_str(state.get("news_report")) if state else "",
+        "fundamentals_report":    _to_str(state.get("fundamentals_report")) if state else "",
+        "policy_report":          _to_str(state.get("policy_report")) if state else "",
+        "hot_money_report":       _to_str(state.get("hot_money_report")) if state else "",
+        "lockup_report":          _to_str(state.get("lockup_report")) if state else "",
         "data_quality_summary":  _to_str(state.get("data_quality_summary")) if state else "",
+        # Investment debate sub-fields (matches web: bull/bear history tabs)
+        "bull_history":          _to_str(inv_debate.get("bull_history")) if isinstance(inv_debate, dict) else "",
+        "bear_history":           _to_str(inv_debate.get("bear_history")) if isinstance(inv_debate, dict) else "",
         "investment_plan":       _to_str(state.get("investment_plan")) if state else "",
         "trader_investment_plan": _to_str(state.get("trader_investment_plan")) if state else "",
-        "final_trade_decision":  _to_str(state.get("final_trade_decision")) if state else "",
+        # Risk debate sub-fields (matches web: 4 sub-tabs)
+        "risk_aggressive_history":    _to_str(risk_debate.get("aggressive_history")) if isinstance(risk_debate, dict) else "",
+        "risk_conservative_history":  _to_str(risk_debate.get("conservative_history")) if isinstance(risk_debate, dict) else "",
+        "risk_neutral_history":       _to_str(risk_debate.get("neutral_history")) if isinstance(risk_debate, dict) else "",
         "risk_judge_decision":   _to_str(
-            state.get("risk_debate_state", {}).get("judge_decision", "")
-            if isinstance(state.get("risk_debate_state"), dict)
-            else state.get("risk_debate_state", "")
+            risk_debate.get("judge_decision", "") if isinstance(risk_debate, dict) else ""
         ) if state else "",
+        "final_trade_decision":  _to_str(state.get("final_trade_decision")) if state else "",
     }
 
     # Compute cost from model pricing
@@ -162,6 +170,9 @@ def report_data(
 
     signal = task.tracker.signal or ""
 
+    inv_debate = state.get("investment_debate_state", {})
+    risk_debate = state.get("risk_debate_state", {})
+
     return {
         "status": "completed",
         "ticker": task.ticker,
@@ -174,22 +185,25 @@ def report_data(
         "tokens_out": task.tracker.tokens_out,
         "cost": task.cost,
         "reports": {
-            "market_report":        _to_str(state.get("market_report")),
-            "sentiment_report":     _to_str(state.get("sentiment_report")),
-            "news_report":          _to_str(state.get("news_report")),
-            "fundamentals_report":  _to_str(state.get("fundamentals_report")),
-            "policy_report":        _to_str(state.get("policy_report")),
-            "hot_money_report":     _to_str(state.get("hot_money_report")),
-            "lockup_report":        _to_str(state.get("lockup_report")),
-            "data_quality_summary": _to_str(state.get("data_quality_summary")),
-            "investment_plan":      _to_str(state.get("investment_plan")),
-            "trader_investment_plan": _to_str(state.get("trader_investment_plan")),
-            "final_trade_decision": _to_str(state.get("final_trade_decision")),
-            "risk_judge_decision": _to_str(
-                state.get("risk_debate_state", {}).get("judge_decision", "")
-                if isinstance(state.get("risk_debate_state"), dict)
-                else state.get("risk_debate_state", "")
+            "market_report":           _to_str(state.get("market_report")),
+            "sentiment_report":        _to_str(state.get("sentiment_report")),
+            "news_report":             _to_str(state.get("news_report")),
+            "fundamentals_report":     _to_str(state.get("fundamentals_report")),
+            "policy_report":           _to_str(state.get("policy_report")),
+            "hot_money_report":        _to_str(state.get("hot_money_report")),
+            "lockup_report":           _to_str(state.get("lockup_report")),
+            "data_quality_summary":   _to_str(state.get("data_quality_summary")),
+            "bull_history":            _to_str(inv_debate.get("bull_history")) if isinstance(inv_debate, dict) else "",
+            "bear_history":            _to_str(inv_debate.get("bear_history")) if isinstance(inv_debate, dict) else "",
+            "investment_plan":         _to_str(state.get("investment_plan")),
+            "trader_investment_plan":  _to_str(state.get("trader_investment_plan")),
+            "risk_aggressive_history":    _to_str(risk_debate.get("aggressive_history")) if isinstance(risk_debate, dict) else "",
+            "risk_conservative_history":  _to_str(risk_debate.get("conservative_history")) if isinstance(risk_debate, dict) else "",
+            "risk_neutral_history":       _to_str(risk_debate.get("neutral_history")) if isinstance(risk_debate, dict) else "",
+            "risk_judge_decision":    _to_str(
+                risk_debate.get("judge_decision", "") if isinstance(risk_debate, dict) else ""
             ),
+            "final_trade_decision":   _to_str(state.get("final_trade_decision")),
         },
     }
 
@@ -209,6 +223,9 @@ def download_markdown(
         raise HTTPException(status_code=500, detail="Report data not available")
 
     signal = task.tracker.signal or ""
+
+    inv_debate = state.get("investment_debate_state", {})
+    risk_debate = state.get("risk_debate_state", {})
 
     lines = [
         f"# XT 分析报告",
@@ -238,10 +255,24 @@ def download_markdown(
 
     if state.get("data_quality_summary"):
         lines.extend(["", "## 数据质量门控", "", state["data_quality_summary"], ""])
+    # Investment debate sub-sections
+    if inv_debate.get("bull_history"):
+        lines.extend(["", "### 多方历史", "", inv_debate["bull_history"], ""])
+    if inv_debate.get("bear_history"):
+        lines.extend(["", "### 空方历史", "", inv_debate["bear_history"], ""])
     if state.get("investment_plan"):
-        lines.extend(["", "## 投资计划", "", state["investment_plan"], ""])
+        lines.extend(["", "## 投资计划（研究经理综合）", "", state["investment_plan"], ""])
     if state.get("trader_investment_plan"):
         lines.extend(["", "## 交易方案", "", state["trader_investment_plan"], ""])
+    # Risk debate sub-sections
+    if risk_debate.get("aggressive_history"):
+        lines.extend(["", "### 激进观点", "", risk_debate["aggressive_history"], ""])
+    if risk_debate.get("conservative_history"):
+        lines.extend(["", "### 保守观点", "", risk_debate["conservative_history"], ""])
+    if risk_debate.get("neutral_history"):
+        lines.extend(["", "### 中性观点", "", risk_debate["neutral_history"], ""])
+    if risk_debate.get("judge_decision"):
+        lines.extend(["", "### 风控决策", "", risk_debate["judge_decision"], ""])
     if state.get("final_trade_decision"):
         lines.extend(["", "## 最终决策", "", state["final_trade_decision"], ""])
 
