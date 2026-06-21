@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import threading
+import time
+from collections import defaultdict
 from datetime import date
 from typing import Optional
 
@@ -24,6 +27,50 @@ _templates = Jinja2Templates(
 )
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
+
+_ALLOWED_BACKEND_PREFIXES = (
+    "http://192.168.",
+    "http://10.",
+    "http://172.",      # RFC1918 private blocks
+    "http://localhost",
+    "http://127.0.0.1",
+)
+
+
+def _validate_backend_url(url: Optional[str]) -> Optional[str]:
+    if url is None:
+        return None
+    if not url.startswith(_ALLOWED_BACKEND_PREFIXES):
+        raise HTTPException(
+            status_code=400,
+            detail="backend_url must point to a private network address",
+        )
+    return url
+
+
+# ── In-memory rate limiter (per-user, 30 task creations per minute) ─────────────
+_rate_limit_window = 60.0        # seconds
+_rate_limit_max = 30             # max creations per window per user
+_rate_limit_lock = threading.Lock()
+_rate_limit_map: dict[str, list[float]] = defaultdict(list)
+
+
+def _check_rate_limit(user_id: str) -> None:
+    """Raise 429 if user has exceeded the task-creation rate limit."""
+    now = time.time()
+    with _rate_limit_lock:
+        timestamps = _rate_limit_map[user_id]
+        # Evict timestamps outside the current window
+        cutoff = now - _rate_limit_window
+        timestamps[:] = [t for t in timestamps if t > cutoff]
+        if len(timestamps) >= _rate_limit_max:
+            retry_after = int(_rate_limit_window - (now - timestamps[0])) + 1
+            raise HTTPException(
+                status_code=429,
+                detail=f"Rate limit exceeded ({_rate_limit_max} tasks/min). Retry after {retry_after}s.",
+                headers={"Retry-After": str(retry_after)},
+            )
+        timestamps.append(now)
 
 
 # ── Page routes (no auth on template rendering) ──────────────────────────────────
@@ -90,6 +137,8 @@ def create_task(
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")
 
+    _check_rate_limit(session.user_id)
+
     store = get_store(session.user_id)
 
     trade_date = req.trade_date or str(date.today())
@@ -103,7 +152,7 @@ def create_task(
         llm_provider=provider,
         deep_think_llm=deep_model,
         quick_think_llm=quick_model,
-        backend_url=req.backend_url,
+        backend_url=_validate_backend_url(req.backend_url),
         max_debate_rounds=req.max_debate_rounds,
         max_risk_discuss_rounds=req.max_risk_discuss_rounds,
         output_language=req.output_language,

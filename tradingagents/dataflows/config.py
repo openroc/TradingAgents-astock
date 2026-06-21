@@ -1,3 +1,5 @@
+import copy
+
 import tradingagents.default_config as default_config
 from typing import Dict, Optional
 
@@ -24,7 +26,7 @@ def get_config() -> Dict:
     """Get the current configuration."""
     if _config is None:
         initialize_config()
-    return _config.copy()
+    return copy.deepcopy(_config)
 
 
 # Initialize with default config

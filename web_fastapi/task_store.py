@@ -193,6 +193,9 @@ class TaskStore:
         tracker.completed_stages = d.get("completed_stages", [])
         if d["status"] == "completed":
             tracker.is_complete = True
+            tracker.is_running = False
+        elif d["status"] == "running":
+            tracker.is_running = True
         # Restore saved elapsed/start_time so list UI shows correct duration
         # elapsed is a read-only property (computed from start_time), so we
         # derive the correct start_time to match the saved elapsed value
@@ -301,10 +304,12 @@ class TaskStore:
             return
         data = {"version": 1, "tasks": tasks_list}
         try:
-            self._tasks_file.write_text(
+            tmp_path = self._tasks_file.with_suffix(".tmp")
+            tmp_path.write_text(
                 json.dumps(data, ensure_ascii=False, indent=2),
                 encoding="utf-8",
             )
+            tmp_path.replace(self._tasks_file)
             self._dirty = False
         except Exception as exc:
             logger.warning("Failed to persist tasks for %s: %s", self._user_id, exc)
@@ -324,7 +329,6 @@ class TaskStore:
             t.tracker.tokens_out = tracker.tokens_out
             t.tracker.start_time = tracker.start_time
             self._dirty = True
-        if self._dirty:
             self._save()
 
     # ── Task queue ─────────────────────────────────────────────────────────────
@@ -447,9 +451,17 @@ class TaskStore:
                 self._save()
                 return task_id
             else:
-                # Queue full — caller should reject with 429
-                raise RuntimeError(f"Queue full (max {max_queue_size})")
-        self._save()
+                # Queue full — double-check concurrency slots (tasks may have completed since our check above)
+                running2 = sum(1 for t in self._tasks.values() if t.status == "running")
+                if running2 < max_conc:
+                    task.status = "running"
+                    task_config = config
+                    task_ticker = ticker
+                    task_trade_date = trade_date
+                    self._save()
+                else:
+                    raise RuntimeError(f"Queue full (max {max_queue_size})")
+            self._save()
         if task.status == "running":
             from web_fastapi.runner import start_analysis
             start_analysis(task_id, task_ticker, task_trade_date, task_config)
@@ -472,8 +484,7 @@ class TaskStore:
                 self._tasks[task_id].status = status
                 self._tasks[task_id].error = error
                 self._dirty = True
-        if self._dirty:
-            self._save()
+                self._save()
         # When a running task finishes, free up a slot for queued tasks
         if status in ("completed", "error", "abort"):
             self.dispatch_queued()
@@ -497,8 +508,7 @@ class TaskStore:
                 task.final_state = final_state
                 task.cost = cost
                 self._dirty = True
-        if self._dirty:
-            self._save()
+                self._save()
         self.dispatch_queued()
 
     def list_tasks(self, page: int = 1, page_size: int = 20) -> dict:
@@ -544,7 +554,7 @@ class TaskStore:
                 self._queue.remove(task_id)
             del self._tasks[task_id]
             self._dirty = True
-        self._save()
+            self._save()
         if was_running:
             self.dispatch_queued()
         return True
@@ -557,6 +567,6 @@ class TaskStore:
             self._tasks[task_id].status = "abort"
             self._tasks[task_id].error = reason
             self._dirty = True
-        self._save()
+            self._save()
         self.dispatch_queued()
         return True

@@ -12,6 +12,13 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+
+_CORS_ORIGINS = [
+    "http://localhost:8000",
+    "http://localhost:8090",
+    "http://127.0.0.1:8000",
+    "http://127.0.0.1:8090",
+]
 from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
@@ -60,8 +67,8 @@ def _record_partial_billing_for_running_tasks() -> None:
                         )
                         count += 1
                         logger.info("  Recorded partial billing: %s (%s tokens_in=%d)", task_id, task.ticker, task.tracker.tokens_in)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.warning("  Failed to record partial billing for %s: %s", task_id, exc)
         if count:
             logger.info("Recorded partial billing for %d interrupted tasks", count)
         else:
@@ -99,7 +106,7 @@ app = FastAPI(
 # ── CORS ──────────────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

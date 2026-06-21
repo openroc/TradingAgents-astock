@@ -16,7 +16,7 @@ from tradingagents.default_config import DEFAULT_CONFIG
 
 # Provider → default OpenAI-compatible base URL (None = use provider's official endpoint)
 DEFAULT_BACKEND_URLS: dict[str, Optional[str]] = {
-    "oneapi": "http://192.168.3.9:4000/v1",
+    "oneapi": os.getenv("ONEAPI_BASE_URL", "http://192.168.3.9:4000/v1"),
     "openai": None,
     "deepseek": None,
     "qwen": None,

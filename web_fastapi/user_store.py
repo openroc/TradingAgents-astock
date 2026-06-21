@@ -147,10 +147,15 @@ def _save() -> None:
                 }
                 for u in _users.values()
             ]
-        _USERS_FILE.write_text(
-            json.dumps({"version": 1, "users": users_list}, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+            try:
+                tmp_path = _USERS_FILE.with_suffix(".tmp")
+                tmp_path.write_text(
+                    json.dumps({"version": 1, "users": users_list}, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+                tmp_path.replace(_USERS_FILE)
+            except Exception as exc:
+                logger.warning("Failed to save users: %s", exc)
     except Exception as exc:
         logger.warning("Failed to save users: %s", exc)
 

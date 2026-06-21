@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from pathlib import Path
 from typing import Any
@@ -32,7 +33,7 @@ def run_analysis(task_id: str, ticker: str, trade_date: str, config: dict) -> No
 
     try:
         graph = TradingAgentsGraph(
-            debug=True,
+            debug=os.getenv("XT_DEBUG", "0") == "1",
             config=config,
             callbacks=[stats],
         )

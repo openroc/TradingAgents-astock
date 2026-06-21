@@ -3,6 +3,7 @@
 from typing import List, Optional
 from pathlib import Path
 import re
+import secrets
 
 from tradingagents.agents.utils.rating import parse_rating
 
@@ -10,8 +11,6 @@ from tradingagents.agents.utils.rating import parse_rating
 class TradingMemoryLog:
     """Append-only markdown log of trading decisions and reflections."""
 
-    # HTML comment: cannot appear in LLM prose output, safe as a hard delimiter
-    _SEPARATOR = "\n\n<!-- ENTRY_END -->\n\n"
     # Precompiled patterns — avoids re-compilation on every load_entries() call
     _DECISION_RE = re.compile(r"DECISION:\n(.*?)(?=\nREFLECTION:|\Z)", re.DOTALL)
     _REFLECTION_RE = re.compile(r"REFLECTION:\n(.*?)$", re.DOTALL)
@@ -25,6 +24,24 @@ class TradingMemoryLog:
             self._log_path.parent.mkdir(parents=True, exist_ok=True)
         # Optional cap on resolved entries. None disables rotation.
         self._max_entries = cfg.get("memory_log_max_entries")
+        self._init_separator()
+
+    def _init_separator(self) -> None:
+        """Initialize or load the high-entropy entry separator.
+
+        The separator is persisted to a hidden file alongside the log so that
+        restarts of the same log use the same delimiter (avoiding split corruption).
+        A new random suffix is generated only when no persisted separator exists.
+        """
+        if self._log_path is None:
+            self._SEPARATOR = f"\n\n<!-- XMEM-{secrets.token_hex(8)} -->\n\n"
+            return
+        sep_file = self._log_path.parent / ".memory_separator"
+        if sep_file.exists():
+            self._SEPARATOR = sep_file.read_text()
+        else:
+            self._SEPARATOR = f"\n\n<!-- XMEM-{secrets.token_hex(8)} -->\n\n"
+            sep_file.write_text(self._SEPARATOR)
 
     # --- Write path (Phase A) ---
 
