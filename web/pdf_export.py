@@ -100,6 +100,16 @@ def _signal_color(signal: str) -> tuple[int, int, int]:
     return (251, 191, 36)
 
 
+_ANALYST_SECTIONS = [
+    ("market_report", "技术分析"),
+    ("sentiment_report", "市场情绪"),
+    ("news_report", "新闻舆情"),
+    ("fundamentals_report", "基本面"),
+    ("policy_report", "政策分析"),
+    ("hot_money_report", "游资追踪"),
+    ("lockup_report", "解禁/减持"),
+]
+
 _REPORT_SECTIONS = [
     ("market_report", "技术分析报告"),
     ("sentiment_report", "市场情绪报告"),
@@ -351,3 +361,71 @@ def generate_pdf(final_state: dict[str, Any], ticker: str, trade_date: str, sign
         pdf.add_section("最终决策", _strip_think(str(final_decision)))
 
     return bytes(pdf.output())
+
+
+def generate_markdown(final_state: dict[str, Any], ticker: str, trade_date: str, signal: str) -> str:
+    """Generate a Markdown report and return it as a string."""
+    lines = [
+        f"# A股多Agent投研分析报告",
+        "",
+        f"**股票代码:** {ticker}",
+        f"**分析日期:** {trade_date}",
+        f"**交易信号:** {signal.upper()}",
+        "",
+        "---",
+        "",
+    ]
+
+    inv_plan = final_state.get("investment_plan", "")
+    if inv_plan:
+        lines += ["## 最终投资建议", "", _strip_think(str(inv_plan)), ""]
+
+    lines += ["## 分析师报告", ""]
+    for key, title in _ANALYST_SECTIONS:
+        content = final_state.get(key, "")
+        if content:
+            lines += [f"### {title}", "", _strip_think(str(content)), ""]
+
+    debate = final_state.get("investment_debate_state")
+    if debate and isinstance(debate, dict):
+        lines += ["## 多空辩论", ""]
+        if debate.get("bull_history"):
+            lines += ["### 多方论点", "", _strip_think(debate["bull_history"]), ""]
+        if debate.get("bear_history"):
+            lines += ["### 空方论点", "", _strip_think(debate["bear_history"]), ""]
+        if debate.get("judge_decision"):
+            lines += ["### 研究经理决策", "", _strip_think(debate["judge_decision"]), ""]
+
+    trader_decision = final_state.get("trader_investment_decision", "")
+    if trader_decision:
+        lines += ["## 交易员决策", "", _strip_think(str(trader_decision)), ""]
+
+    risk = final_state.get("risk_debate_state")
+    if risk and isinstance(risk, dict):
+        lines += ["## 风控评估", ""]
+        for key_name, label in [
+            ("aggressive_history", "激进观点"),
+            ("conservative_history", "保守观点"),
+            ("neutral_history", "中性观点"),
+        ]:
+            if risk.get(key_name):
+                lines += [f"### {label}", "", _strip_think(risk[key_name]), ""]
+        if risk.get("judge_decision"):
+            lines += ["### 风控决策", "", _strip_think(risk["judge_decision"]), ""]
+
+    dqs = final_state.get("data_quality_summary", "")
+    if dqs:
+        lines += ["## 数据质量", "", str(dqs), ""]
+
+    final_decision = final_state.get("final_trade_decision", "")
+    if final_decision:
+        lines += ["## 最终决策", "", _strip_think(str(final_decision)), ""]
+
+    lines += [
+        "",
+        "---",
+        "",
+        "⚠️ 本报告由 AI 自动生成，仅供学习研究，不构成投资建议。",
+    ]
+
+    return "\n".join(lines)
