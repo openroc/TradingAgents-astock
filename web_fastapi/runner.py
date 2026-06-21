@@ -171,10 +171,22 @@ def _update_tracker(chunk: dict, tracker) -> None:
     # in the chunk with a non-empty value.
     newly_completed = []
     for key, val in chunk.items():
-        if key in _report_to_stage and val:
-            stage_id = _report_to_stage[key]
-            if stage_id not in tracker.completed_stages:
-                newly_completed.append(stage_id)
+        if key not in _report_to_stage:
+            continue
+        # Only mark string fields as complete if they are non-empty.
+        # risk_debate_state is a dict; use its judge_decision sub-field as the
+        # indicator of meaningful content.
+        if isinstance(val, str):
+            if not val.strip():
+                continue
+        elif isinstance(val, dict):
+            if not val.get("judge_decision", "").strip():
+                continue
+        else:
+            continue
+        stage_id = _report_to_stage[key]
+        if stage_id not in tracker.completed_stages:
+            newly_completed.append(stage_id)
 
     for stage_id in newly_completed:
         tracker.completed_stages.append(stage_id)
