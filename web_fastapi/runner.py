@@ -180,7 +180,8 @@ def _update_tracker(chunk: dict, tracker) -> None:
             if not val.strip():
                 continue
         elif isinstance(val, dict):
-            if not val.get("judge_decision", "").strip():
+            judge = val.get("judge_decision")
+            if not judge or not str(judge).strip():
                 continue
         else:
             continue
@@ -202,6 +203,8 @@ def _update_tracker(chunk: dict, tracker) -> None:
 
 def _strip(text: str) -> str:
     """Strip LlamaIndex/LangChain debug artifacts from LLM output."""
+    if not text:
+        return ""
     import re
     return re.sub(r"<THINKOPEN>.*?</THINKCLOSE>", "", text, flags=re.DOTALL).strip()
 
