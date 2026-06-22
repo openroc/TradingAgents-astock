@@ -67,7 +67,6 @@ async def view_report(
         # Investment debate sub-fields (matches web: bull/bear history tabs)
         "bull_history":          _to_str(inv_debate.get("bull_history")) if isinstance(inv_debate, dict) else "",
         "bear_history":           _to_str(inv_debate.get("bear_history")) if isinstance(inv_debate, dict) else "",
-        "investment_plan":       _to_str(state.get("investment_plan")) if state else "",
         "trader_investment_plan": _to_str(state.get("trader_investment_plan")) if state else "",
         # Risk debate sub-fields (matches web: 4 sub-tabs)
         "risk_aggressive_history":    _to_str(risk_debate.get("aggressive_history")) if isinstance(risk_debate, dict) else "",
@@ -78,6 +77,7 @@ async def view_report(
         ) if state else "",
         "final_trade_decision":  _to_str(state.get("final_trade_decision")) if state else "",
     }
+    investment_plan = _to_str(state.get("investment_plan")) if state else ""
 
     # Compute cost from model pricing
     task_cost = task.cost
@@ -120,6 +120,9 @@ async def view_report(
             "error": task.error,
             "signal": signal,
             "reports": reports,
+            "investment_plan": investment_plan,
+            "final_trade_decision": _to_str(state.get("final_trade_decision")) if state else "",
+            "trader_investment_plan": _to_str(state.get("trader_investment_plan")) if state else "",
             "elapsed": round(task.tracker.elapsed, 1),
             "llm_calls": task.tracker.llm_calls,
             "tool_calls": task.tracker.tool_calls,
@@ -184,6 +187,9 @@ def report_data(
         "tokens_in": task.tracker.tokens_in,
         "tokens_out": task.tracker.tokens_out,
         "cost": task.cost,
+        "investment_plan": _to_str(state.get("investment_plan")),
+        "final_trade_decision": _to_str(state.get("final_trade_decision")),
+        "trader_investment_plan": _to_str(state.get("trader_investment_plan")),
         "reports": {
             "market_report":           _to_str(state.get("market_report")),
             "sentiment_report":        _to_str(state.get("sentiment_report")),
@@ -195,15 +201,12 @@ def report_data(
             "data_quality_summary":   _to_str(state.get("data_quality_summary")),
             "bull_history":            _to_str(inv_debate.get("bull_history")) if isinstance(inv_debate, dict) else "",
             "bear_history":            _to_str(inv_debate.get("bear_history")) if isinstance(inv_debate, dict) else "",
-            "investment_plan":         _to_str(state.get("investment_plan")),
-            "trader_investment_plan":  _to_str(state.get("trader_investment_plan")),
             "risk_aggressive_history":    _to_str(risk_debate.get("aggressive_history")) if isinstance(risk_debate, dict) else "",
             "risk_conservative_history":  _to_str(risk_debate.get("conservative_history")) if isinstance(risk_debate, dict) else "",
             "risk_neutral_history":       _to_str(risk_debate.get("neutral_history")) if isinstance(risk_debate, dict) else "",
             "risk_judge_decision":    _to_str(
                 risk_debate.get("judge_decision", "") if isinstance(risk_debate, dict) else ""
             ),
-            "final_trade_decision":   _to_str(state.get("final_trade_decision")),
         },
     }
 
@@ -238,6 +241,35 @@ def download_markdown(
         "",
     ]
 
+    # ── Part 1: 最终决策 (Portfolio Manager)
+    if state.get("final_trade_decision"):
+        lines.extend(["", "## 最终决策", "", state["final_trade_decision"], ""])
+
+    # ── Part 2: 交易员决策 (Trader)
+    if state.get("trader_investment_plan"):
+        lines.extend(["", "## 交易员决策", "", state["trader_investment_plan"], ""])
+
+    # ── Part 3: 研究经理结论 (Research Manager)
+    if state.get("investment_plan"):
+        lines.extend(["", "## 研究经理结论", "", state["investment_plan"], ""])
+
+    # ── Part 4: 多空辩论
+    if inv_debate.get("bull_history"):
+        lines.extend(["", "### 多方历史", "", inv_debate["bull_history"], ""])
+    if inv_debate.get("bear_history"):
+        lines.extend(["", "### 空方历史", "", inv_debate["bear_history"], ""])
+
+    # ── Part 5: 风控评估
+    if risk_debate.get("aggressive_history"):
+        lines.extend(["", "### 激进观点", "", risk_debate["aggressive_history"], ""])
+    if risk_debate.get("conservative_history"):
+        lines.extend(["", "### 保守观点", "", risk_debate["conservative_history"], ""])
+    if risk_debate.get("neutral_history"):
+        lines.extend(["", "### 中性观点", "", risk_debate["neutral_history"], ""])
+    if risk_debate.get("judge_decision"):
+        lines.extend(["", "### 风控决策", "", risk_debate["judge_decision"], ""])
+
+    # ── Part 6: 分析师报告
     sections = [
         ("market_report", "技术分析报告"),
         ("sentiment_report", "市场情绪报告"),
@@ -247,34 +279,10 @@ def download_markdown(
         ("hot_money_report", "游资追踪报告"),
         ("lockup_report", "解禁减持报告"),
     ]
-
     for key, title in sections:
         content = state.get(key, "")
         if content:
             lines.extend([f"## {title}", "", content, ""])
-
-    if state.get("data_quality_summary"):
-        lines.extend(["", "## 数据质量门控", "", state["data_quality_summary"], ""])
-    # Investment debate sub-sections
-    if inv_debate.get("bull_history"):
-        lines.extend(["", "### 多方历史", "", inv_debate["bull_history"], ""])
-    if inv_debate.get("bear_history"):
-        lines.extend(["", "### 空方历史", "", inv_debate["bear_history"], ""])
-    if state.get("investment_plan"):
-        lines.extend(["", "## 投资计划（研究经理综合）", "", state["investment_plan"], ""])
-    if state.get("trader_investment_plan"):
-        lines.extend(["", "## 交易方案", "", state["trader_investment_plan"], ""])
-    # Risk debate sub-sections
-    if risk_debate.get("aggressive_history"):
-        lines.extend(["", "### 激进观点", "", risk_debate["aggressive_history"], ""])
-    if risk_debate.get("conservative_history"):
-        lines.extend(["", "### 保守观点", "", risk_debate["conservative_history"], ""])
-    if risk_debate.get("neutral_history"):
-        lines.extend(["", "### 中性观点", "", risk_debate["neutral_history"], ""])
-    if risk_debate.get("judge_decision"):
-        lines.extend(["", "### 风控决策", "", risk_debate["judge_decision"], ""])
-    if state.get("final_trade_decision"):
-        lines.extend(["", "## 最终决策", "", state["final_trade_decision"], ""])
 
     markdown = "\n".join(lines)
 

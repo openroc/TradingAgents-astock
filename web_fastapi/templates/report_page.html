@@ -3,6 +3,9 @@
 
 {% block extra_head %}
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+  marked.use({ breaks: true, gfm: true });
+</script>
 <style>
   .prose table { border-collapse: collapse; width: 100%; }
   .prose th, .prose td { border: 1px solid #374151; padding: 6px 10px; }
@@ -109,6 +112,64 @@
 
 {# ── Main content ── #}
 <div class="flex-1 min-w-0">
+
+  {# ── Part 1: 最终决策 (Portfolio Manager) ── #}
+  <div id="section-final-decision" class="bg-gray-900 border border-emerald-800 rounded-xl overflow-hidden mb-4{% if not final_trade_decision %} hidden{% endif %}">
+    <div class="px-4 py-3 border-b border-emerald-800 bg-emerald-950/30">
+      <span class="text-sm font-semibold text-emerald-400">👔 最终决策</span>
+    </div>
+    <div class="p-6">
+      <div id="cnt-final-decision" class="report-raw prose prose-invert prose-sm max-w-none">{{ final_trade_decision or '（暂无数据）' }}</div>
+    </div>
+  </div>
+
+  {# ── Part 2: 交易员决策 (Trader) ── #}
+  <div id="section-trader-plan" class="bg-gray-900 border border-blue-800 rounded-xl overflow-hidden mb-4{% if not trader_investment_plan %} hidden{% endif %}">
+    <div class="px-4 py-3 border-b border-blue-800 bg-blue-950/30">
+      <span class="text-sm font-semibold text-blue-400">💹 交易员决策</span>
+    </div>
+    <div class="p-6">
+      <div id="cnt-trader-plan" class="report-raw prose prose-invert prose-sm max-w-none">{{ trader_investment_plan or '（暂无数据）' }}</div>
+    </div>
+  </div>
+
+  {# ── Part 3: 多空辩论 (研究经理 + 多方研究员 + 空方研究员 sub-tabs) ── #}
+  <div id="section-debate" class="bg-gray-900 border border-orange-800 rounded-xl overflow-hidden mb-4">
+    <div class="px-4 py-3 border-b border-orange-800 bg-orange-950/30 flex items-center gap-3 flex-wrap">
+      <span class="text-sm font-semibold text-orange-400">⚔️ 多空辩论</span>
+      <div class="flex border border-orange-700 rounded-lg overflow-hidden ml-2">
+        <button class="sub-debate-btn px-3 py-1 text-xs font-medium border-b-2 border-emerald-500 text-emerald-400" data-debate="sub-debate-manager">研究经理</button>
+        <button class="sub-debate-btn px-3 py-1 text-xs font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" data-debate="sub-debate-bull">多方研究员</button>
+        <button class="sub-debate-btn px-3 py-1 text-xs font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" data-debate="sub-debate-bear">空方研究员</button>
+      </div>
+    </div>
+    <div class="p-4">
+      <div id="sub-debate-manager" class="sub-debate-panel"><div id="cnt-investment-plan" class="report-raw prose prose-invert prose-sm max-w-none">{{ investment_plan or '（暂无数据）' }}</div></div>
+      <div id="sub-debate-bull" class="sub-debate-panel hidden"><div id="cnt-debate-bull" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.bull_history or '（暂无数据）' }}</div></div>
+      <div id="sub-debate-bear" class="sub-debate-panel hidden"><div id="cnt-debate-bear" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.bear_history or '（暂无数据）' }}</div></div>
+    </div>
+  </div>
+
+  {# ── Part 5: 风控评估 (4 sub-tabs) ── #}
+  <div id="section-risk" class="bg-gray-900 border border-yellow-800 rounded-xl overflow-hidden mb-4">
+    <div class="px-4 py-3 border-b border-yellow-800 bg-yellow-950/30 flex items-center gap-3">
+      <span class="text-sm font-semibold text-yellow-400">🛡️ 风控评估</span>
+      <div class="flex border border-yellow-700 rounded-lg overflow-hidden ml-2">
+        <button class="sub-risk-btn px-3 py-1 text-xs font-medium border-b-2 border-emerald-500 text-emerald-400" data-risk="sub-risk-aggressive">激进观点</button>
+        <button class="sub-risk-btn px-3 py-1 text-xs font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" data-risk="sub-risk-conservative">保守观点</button>
+        <button class="sub-risk-btn px-3 py-1 text-xs font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" data-risk="sub-risk-neutral">中性观点</button>
+        <button class="sub-risk-btn px-3 py-1 text-xs font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" data-risk="sub-risk-judge">风控决策</button>
+      </div>
+    </div>
+    <div class="p-4">
+      <div id="sub-risk-aggressive" class="sub-risk-panel"><div id="cnt-risk-aggressive" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.risk_aggressive_history or '（暂无数据）' }}</div></div>
+      <div id="sub-risk-conservative" class="sub-risk-panel hidden"><div id="cnt-risk-conservative" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.risk_conservative_history or '（暂无数据）' }}</div></div>
+      <div id="sub-risk-neutral" class="sub-risk-panel hidden"><div id="cnt-risk-neutral" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.risk_neutral_history or '（暂无数据）' }}</div></div>
+      <div id="sub-risk-judge" class="sub-risk-panel hidden"><div id="cnt-risk" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.risk_judge_decision or '（暂无数据）' }}</div></div>
+    </div>
+  </div>
+
+  {# ── Part 6: 分析师报告 (only tabs remaining) ── #}
   <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-6">
     <div class="flex border-b border-gray-800 overflow-x-auto" id="tab-headers">
       <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-emerald-500 text-emerald-400 whitespace-nowrap" data-tab="tab-market">📊 技术分析</button>
@@ -119,15 +180,11 @@
       <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-hot-money">🔥 游资</button>
       <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-lockup">🔒 解禁</button>
       <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-quality">✅ 质量门控</button>
-      <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-debate">⚔️ 多空辩论</button>
-      <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-trader">💹 交易方案</button>
-      <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-risk">🛡️ 风控评估</button>
-      <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-pm">👔 最终决策</button>
     </div>
 
     <div class="p-6 min-h-96" id="report-content">
       <div id="tab-market" class="tab-panel">
-        <div id="cnt-market" class="report-raw prose prose-invert prose-sm max-w-none prose-headings:text-gray-100 prose-p:text-gray-300 prose-strong:text-gray-100 prose-code:text-emerald-400 prose-a:text-emerald-400 prose-table:text-gray-300">{{ reports.market_report or '（暂无数据）' }}</div>
+        <div id="cnt-market" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.market_report or '（暂无数据）' }}</div>
       </div>
       <div id="tab-sentiment" class="tab-panel hidden"><div id="cnt-sentiment" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.sentiment_report or '（暂无数据）' }}</div></div>
       <div id="tab-news" class="tab-panel hidden"><div id="cnt-news" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.news_report or '（暂无数据）' }}</div></div>
@@ -136,30 +193,6 @@
       <div id="tab-hot-money" class="tab-panel hidden"><div id="cnt-hot-money" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.hot_money_report or '（暂无数据）' }}</div></div>
       <div id="tab-lockup" class="tab-panel hidden"><div id="cnt-lockup" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.lockup_report or '（暂无数据）' }}</div></div>
       <div id="tab-quality" class="tab-panel hidden"><div id="cnt-quality" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.data_quality_summary or '（暂无数据）' }}</div></div>
-      <div id="tab-debate" class="tab-panel hidden">
-        <div class="flex border-b border-gray-700 mb-4" id="sub-debate-headers">
-          <button class="sub-tab-btn px-3 py-2 text-xs font-medium border-b-2 border-emerald-500 text-emerald-400" data-sub="sub-debate-bull">多方历史</button>
-          <button class="sub-tab-btn px-3 py-2 text-xs font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" data-sub="sub-debate-bear">空方历史</button>
-          <button class="sub-tab-btn px-3 py-2 text-xs font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" data-sub="sub-debate-research">综合决策</button>
-        </div>
-        <div id="sub-debate-bull" class="sub-debate-panel"><div id="cnt-debate-bull" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.bull_history or '（暂无数据）' }}</div></div>
-        <div id="sub-debate-bear" class="sub-debate-panel hidden"><div id="cnt-debate-bear" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.bear_history or '（暂无数据）' }}</div></div>
-        <div id="sub-debate-research" class="sub-debate-panel hidden"><div id="cnt-debate-investment" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.investment_plan or '（暂无数据）' }}</div></div>
-      </div>
-      <div id="tab-trader" class="tab-panel hidden"><div id="cnt-trader" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.trader_investment_plan or '（暂无数据）' }}</div></div>
-      <div id="tab-risk" class="tab-panel hidden">
-        <div class="flex border-b border-gray-700 mb-4" id="sub-risk-headers">
-          <button class="sub-risk-btn px-3 py-2 text-xs font-medium border-b-2 border-emerald-500 text-emerald-400" data-risk="sub-risk-aggressive">激进观点</button>
-          <button class="sub-risk-btn px-3 py-2 text-xs font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" data-risk="sub-risk-conservative">保守观点</button>
-          <button class="sub-risk-btn px-3 py-2 text-xs font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" data-risk="sub-risk-neutral">中性观点</button>
-          <button class="sub-risk-btn px-3 py-2 text-xs font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" data-risk="sub-risk-judge">风控决策</button>
-        </div>
-        <div id="sub-risk-aggressive" class="sub-risk-panel"><div id="cnt-risk-aggressive" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.risk_aggressive_history or '（暂无数据）' }}</div></div>
-        <div id="sub-risk-conservative" class="sub-risk-panel hidden"><div id="cnt-risk-conservative" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.risk_conservative_history or '（暂无数据）' }}</div></div>
-        <div id="sub-risk-neutral" class="sub-risk-panel hidden"><div id="cnt-risk-neutral" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.risk_neutral_history or '（暂无数据）' }}</div></div>
-        <div id="sub-risk-judge" class="sub-risk-panel hidden"><div id="cnt-risk" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.risk_judge_decision or '（暂无数据）' }}</div></div>
-      </div>
-      <div id="tab-pm" class="tab-panel hidden"><div id="cnt-pm" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.final_trade_decision or '（暂无数据）' }}</div></div>
     </div>
   </div>
 </div>
@@ -192,14 +225,14 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 });
 
 // ── Sub-tab switching (debate sub-tabs) ──────────────────────────────────
-document.querySelectorAll('.sub-tab-btn').forEach(btn => {
+document.querySelectorAll('.sub-debate-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.sub-debate-panel').forEach(p => p.classList.add('hidden'));
-    document.querySelectorAll('.sub-tab-btn').forEach(b => {
+    document.querySelectorAll('.sub-debate-btn').forEach(b => {
       b.classList.remove('border-emerald-500','text-emerald-400');
       b.classList.add('border-transparent','text-gray-400');
     });
-    const sub = btn.dataset.sub;
+    const sub = btn.dataset.debate;
     document.getElementById(sub)?.classList.remove('hidden');
     btn.classList.add('border-emerald-500','text-emerald-400');
     btn.classList.remove('border-transparent','text-gray-400');
@@ -300,28 +333,42 @@ function updateStats(data) {
 
 // ── Update report content when completed ─────────────────────────────────
 function updateReportContent(data) {
+  // Analyst tab content
   const map = {
     'cnt-market':            data.reports?.market_report,
     'cnt-sentiment':         data.reports?.sentiment_report,
     'cnt-news':              data.reports?.news_report,
-    'cnt-fundamentals':       data.reports?.fundamentals_report,
+    'cnt-fundamentals':      data.reports?.fundamentals_report,
     'cnt-policy':            data.reports?.policy_report,
     'cnt-hot-money':         data.reports?.hot_money_report,
     'cnt-lockup':            data.reports?.lockup_report,
     'cnt-quality':           data.reports?.data_quality_summary,
-    'cnt-debate-bull':       data.reports?.bull_history,
-    'cnt-debate-bear':       data.reports?.bear_history,
-    'cnt-debate-investment': data.reports?.investment_plan,
-    'cnt-trader':            data.reports?.trader_investment_plan,
-    'cnt-risk-aggressive':   data.reports?.risk_aggressive_history,
-    'cnt-risk-conservative': data.reports?.risk_conservative_history,
-    'cnt-risk-neutral':     data.reports?.risk_neutral_history,
-    'cnt-risk':              data.reports?.risk_judge_decision,
-    'cnt-pm':               data.reports?.final_trade_decision,
   };
   Object.entries(map).forEach(([id, raw]) => {
     const el = document.getElementById(id);
     if (el && raw) el.innerHTML = renderMarkdown(raw);
+  });
+
+  // Top-level cards (always visible on completion)
+  const topSections = [
+    { elId: 'cnt-final-decision',     secId: 'section-final-decision',  raw: data.final_trade_decision },
+    { elId: 'cnt-trader-plan',        secId: 'section-trader-plan',    raw: data.trader_investment_plan },
+    { elId: 'cnt-investment-plan',    secId: null,                    raw: data.investment_plan },
+    { elId: 'cnt-debate-bull',        secId: null,                    raw: data.reports?.bull_history },
+    { elId: 'cnt-debate-bear',        secId: null,                    raw: data.reports?.bear_history },
+    { elId: 'cnt-risk-aggressive',    secId: null,                    raw: data.reports?.risk_aggressive_history },
+    { elId: 'cnt-risk-conservative',  secId: null,                    raw: data.reports?.risk_conservative_history },
+    { elId: 'cnt-risk-neutral',       secId: null,                    raw: data.reports?.risk_neutral_history },
+    { elId: 'cnt-risk',               secId: null,                    raw: data.reports?.risk_judge_decision },
+  ];
+  topSections.forEach(({ elId, secId, raw }) => {
+    if (!raw) return;
+    const el = document.getElementById(elId);
+    if (el) el.innerHTML = renderMarkdown(raw);
+    if (secId) {
+      const section = document.getElementById(secId);
+      if (section) section.classList.remove('hidden');
+    }
   });
 }
 
@@ -341,24 +388,6 @@ async function poll() {
       updateReportContent(data);
       document.getElementById('running-panel').classList.add('hidden');
       document.getElementById('error-panel').classList.add('hidden');
-      // Show download buttons now that the task is done
-      const taskId = document.querySelector('[data-task-id]')?.dataset.taskId
-        || window.location.pathname.split('/report/')[1]?.split('/')[0];
-      if (taskId) {
-        const btnArea = document.querySelector('#hdr-signal-badge')?.parentElement;
-        if (btnArea && !btnArea.querySelector('.btn-md')) {
-          const md = document.createElement('a');
-          md.href = `/report/${taskId}/markdown`;
-          md.className = 'btn-md text-sm bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg transition';
-          md.textContent = '📄 MD';
-          const pdf = document.createElement('a');
-          pdf.href = `/report/${taskId}/pdf`;
-          pdf.className = 'text-sm bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg transition';
-          pdf.textContent = '📕 PDF';
-          btnArea.appendChild(md);
-          btnArea.appendChild(pdf);
-        }
-      }
     } else if (data.status === 'error' || data.status === 'abort') {
       document.getElementById('running-panel').classList.add('hidden');
       document.getElementById('error-panel').classList.remove('hidden');

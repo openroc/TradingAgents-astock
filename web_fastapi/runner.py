@@ -57,6 +57,10 @@ def run_analysis(task_id: str, ticker: str, trade_date: str, config: dict) -> No
             last_chunk.get("final_trade_decision", "")
         )
 
+        # Convert all text fields to HTML-safe form for the web UI:
+        # <think> tags removed, newlines → <br>
+        _htmlify_chunk(last_chunk)
+
         task.tracker.mark_complete(last_chunk, signal)
         task.tracker.is_running = False
         task.tracker.is_complete = True
@@ -202,9 +206,56 @@ def _update_tracker(chunk: dict, tracker) -> None:
 
 
 def _strip_think_tags(text: str) -> str:
-    """Strip LlamaIndex/LangChain debug blocks from LLM output."""
+    """Strip LlamaIndex/LangChain debug blocks from LLM output (plain text, no HTML)."""
     import re
     return re.sub(r"\x03.*?\x03\s*", "", text, flags=re.DOTALL).strip()
+
+
+def _html_text(text: str) -> str:
+    """Strip <think> tags and convert newlines to <br> for HTML rendering.
+
+    After <think> tags are stripped, bare newlines no longer produce visual breaks
+    in HTML. Converting them to <br> ensures analyst reports, debate content, etc.
+    display with correct paragraph structure in the web UI.
+    """
+    import re
+    # Remove <think>...</think> blocks
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    # Strip control chars (e.g. SOH used by some LLM outputs) then convert \n → <br>
+    text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", text)
+    return text.replace("\n", "<br>").strip()
+
+
+def _htmlify_chunk(chunk: dict) -> None:
+    """Recursively convert all string fields in a graph state chunk to HTML-safe text.
+
+    Mutates chunk in place. Fields named "signal" and those used internally
+    (node names, counters, etc.) are skipped.
+    """
+    skip_keys = {
+        "signal", "node", "nodes", "count", "counter", "stage",
+        "status", "ticker", "trade_date", "report_key", "id",
+    }
+    _htmlify_value(chunk, skip_keys)
+
+
+def _htmlify_value(val: Any, skip_keys: set) -> None:
+    if isinstance(val, dict):
+        for k in list(val.keys()):
+            if k in skip_keys or k.startswith("_"):
+                continue
+            v = val[k]
+            if isinstance(v, str):
+                val[k] = _html_text(v)
+            else:
+                _htmlify_value(v, skip_keys)
+    elif isinstance(val, list):
+        for i in range(len(val)):
+            item = val[i]
+            if isinstance(item, str):
+                val[i] = _html_text(item)
+            else:
+                _htmlify_value(item, skip_keys)
 
 
 def start_analysis(task_id: str, ticker: str, trade_date: str, config: dict) -> threading.Thread:
