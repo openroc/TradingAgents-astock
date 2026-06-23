@@ -63,6 +63,32 @@ def create_portfolio_manager(llm):
 - **Underweight**: Reduce exposure, take partial profits
 - **Sell**: Exit position or avoid entry
 
+**Required Output Format** (follow exactly for display on report page):
+```
+**Rating**: <Buy/Overweight/Hold/Underweight/Sell>
+
+**Executive Summary**: <2-4 sentence concise action plan covering entry strategy, position sizing, key risk levels, and time horizon.>
+
+**Investment Thesis**:
+**支撑持仓**（做多理由，3-4点，每点以一、二、三、序号）:
+一、<理由1>
+二、<理由2>
+三、<理由3>
+
+**抑制追高**（做空/观望理由，3-4点，每点以一、二、三、序号）:
+一、<理由1>
+二、<理由2>
+三、<理由3>
+
+【风险收益评估】:
+<2-3句话描述风险收益比、止损位、目标位>
+
+**时间窗口**:
+- <催化剂1>
+- <催化剂2>
+- <跟踪指标/验证节点>
+```
+
 **Context:**
 - Research Manager's investment plan: **{research_plan}**
 - Trader's transaction proposal: **{trader_plan}**

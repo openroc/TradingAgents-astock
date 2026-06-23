@@ -76,6 +76,14 @@ def run_analysis(task_id: str, ticker: str, trade_date: str, config: dict) -> No
 
         _save_report_to_disk(last_chunk, ticker, trade_date)
 
+        # Clear checkpoint after successful completion so next run starts fresh
+        try:
+            from tradingagents.graph.checkpointer import clear_checkpoint
+            data_dir = config.get("data_cache_dir", os.path.expanduser("~/.tradingagents/cache"))
+            clear_checkpoint(data_dir, ticker, trade_date)
+        except Exception as exc:
+            logger.warning("[%s] Failed to clear checkpoint: %s", task_id, exc)
+
         # Record billing (user pricing from users.json, fallback to models.json)
         task_cost = None
         try:
@@ -212,18 +220,19 @@ def _strip_think_tags(text: str) -> str:
 
 
 def _html_text(text: str) -> str:
-    """Strip <think> tags and convert newlines to <br> for HTML rendering.
+    """Strip <think> tags and control chars from text for HTML rendering.
 
-    After <think> tags are stripped, bare newlines no longer produce visual breaks
-    in HTML. Converting them to <br> ensures analyst reports, debate content, etc.
-    display with correct paragraph structure in the web UI.
+    IMPORTANT: newlines are PRESERVED — do NOT convert \n to <br>.
+    The browser-side marked.js with `breaks: true` handles newline-to-<br>
+    conversion correctly. Converting to <br> server-side causes
+    textContent → marked.parse() to fail, rendering markdown as plain text.
     """
     import re
     # Remove <think>...</think> blocks
     text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
-    # Strip control chars (e.g. SOH used by some LLM outputs) then convert \n → <br>
+    # Strip control chars only; keep newlines for marked.js
     text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", text)
-    return text.replace("\n", "<br>").strip()
+    return text.strip()
 
 
 def _htmlify_chunk(chunk: dict) -> None:
@@ -235,6 +244,16 @@ def _htmlify_chunk(chunk: dict) -> None:
     skip_keys = {
         "signal", "node", "nodes", "count", "counter", "stage",
         "status", "ticker", "trade_date", "report_key", "id",
+        # Structured markdown outputs — skip so render_md sees clean newlines
+        "investment_plan",
+        "trader_investment_plan",
+        # Nested markdown inside debate state dicts
+        "bull_history",
+        "bear_history",
+        "aggressive_history",
+        "conservative_history",
+        "neutral_history",
+        "judge_decision",
     }
     _htmlify_value(chunk, skip_keys)
 
@@ -262,6 +281,116 @@ def start_analysis(task_id: str, ticker: str, trade_date: str, config: dict) -> 
     """Launch the analysis in a daemon thread. Returns the thread handle."""
     t = threading.Thread(
         target=run_analysis,
+        args=(task_id, ticker, trade_date, config),
+        daemon=True,
+    )
+    t.start()
+    return t
+
+
+def resume_analysis(task_id: str, ticker: str, trade_date: str, config: dict) -> None:
+    """Resume a task from its checkpoint. Uses graph.begin() which auto-resumes."""
+    from tradingagents.graph.trading_graph import TradingAgentsGraph
+    from cli.stats_handler import StatsCallbackHandler
+    from web_fastapi.task_store import get_store_for_task
+    from web.progress import PIPELINE_STAGES
+
+    store, task = get_store_for_task(task_id)
+    if task is None:
+        logger.error("[%s] Task not found", task_id)
+        return
+
+    store.update_status(task_id, "running")
+    task = store.get_task(task_id)
+    task.tracker.is_running = True
+    task.tracker.mark_stage_active("resume")
+
+    stats = StatsCallbackHandler()
+
+    try:
+        graph = TradingAgentsGraph(
+            debug=os.getenv("XT_DEBUG", "0") == "1",
+            config=config,
+            callbacks=[stats],
+        )
+
+        # begin() handles checkpoint detection and auto-resume
+        last_chunk = graph.begin(ticker, trade_date)
+
+        signal = graph.process_signal(
+            last_chunk.get("final_trade_decision", "")
+        )
+
+        _htmlify_chunk(last_chunk)
+
+        task.tracker.mark_complete(last_chunk, signal)
+        task.tracker.is_running = False
+        task.tracker.is_complete = True
+
+        graph.ticker = ticker
+        graph._log_state(trade_date, last_chunk)
+
+        report_summary = {
+            "signal": signal,
+            "market_report": (last_chunk.get("market_report") or "")[:500],
+            "final_decision": (last_chunk.get("final_trade_decision") or "")[:1000],
+        }
+
+        _save_report_to_disk(last_chunk, ticker, trade_date)
+
+        # Clear checkpoint after successful completion
+        try:
+            from tradingagents.graph.checkpointer import clear_checkpoint
+            data_dir = config.get("data_cache_dir", os.path.expanduser("~/.tradingagents/cache"))
+            clear_checkpoint(data_dir, ticker, trade_date)
+        except Exception as exc:
+            logger.warning("[%s] Failed to clear checkpoint: %s", task_id, exc)
+
+        task_cost = None
+        try:
+            from web_fastapi import user_store as user_store_module
+            from web_fastapi.billing_store import get_billing_store
+            from web_fastapi.user_store import get_user_by_id
+            billing = get_billing_store(task.user_id)
+            model_name = task.config.get("deep_think_llm", "unknown")
+            user_store_module._load()
+            user = get_user_by_id(task.user_id)
+            user_pricing = None
+            if user and user.input_price_per_million and user.output_price_per_million:
+                user_pricing = {
+                    "input_price_per_million": user.input_price_per_million,
+                    "output_price_per_million": user.output_price_per_million,
+                }
+            task_cost = billing.record_task(
+                task_id=task_id,
+                ticker=ticker,
+                tokens_in=task.tracker.tokens_in,
+                tokens_out=task.tracker.tokens_out,
+                model_name=model_name,
+                user_pricing=user_pricing,
+            )
+        except Exception as exc:
+            logger.warning("[%s] Failed to record billing: %s", task_id, exc)
+
+        store.update_completed(
+            task_id, task.tracker, report_summary, final_state=last_chunk, cost=task_cost
+        )
+        store.update_status(task_id, "completed")
+
+        logger.info("[%s] Resume completed -- signal: %s", task_id, signal)
+
+    except Exception as exc:
+        logger.exception("[%s] Resume failed", task_id)
+        task.tracker.mark_error(str(exc))
+        task.tracker.is_running = False
+        task.tracker.is_complete = True
+        store.update_status(task_id, "error", error=str(exc))
+
+
+def start_resume_analysis(task_id: str, ticker: str, trade_date: str, config: dict) -> threading.Thread:
+    """Launch the resume analysis in a daemon thread. Returns the thread handle."""
+    t = threading.Thread(
+        target=resume_analysis,
         args=(task_id, ticker, trade_date, config),
         daemon=True,
     )

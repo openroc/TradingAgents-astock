@@ -189,12 +189,21 @@ class PortfolioDecision(BaseModel):
             "key risk levels, and time horizon. Two to four sentences."
         ),
     )
-    investment_thesis: str = Field(
-        description=(
-            "Detailed reasoning anchored in specific evidence from the analysts' "
-            "debate. If prior lessons are referenced in the prompt context, "
-            "incorporate them; otherwise rely solely on the current analysis."
-        ),
+    bull_factors: list[str] = Field(
+        default_factory=list,
+        description="3-4 bull factors (reasons to hold/buy). Each is a short sentence.",
+    )
+    bear_factors: list[str] = Field(
+        default_factory=list,
+        description="3-4 bear factors (reasons to reduce/avoid). Each is a short sentence.",
+    )
+    risk_reward_text: str = Field(
+        default="",
+        description="2-3 sentences on risk-reward ratio, stop loss, and price targets.",
+    )
+    catalysts: list[str] = Field(
+        default_factory=list,
+        description="2-3 catalysts or follow-up metrics to monitor.",
     )
     price_target: Optional[float] = Field(
         default=None,
@@ -207,22 +216,63 @@ class PortfolioDecision(BaseModel):
 
 
 def render_pm_decision(decision: PortfolioDecision) -> str:
-    """Render a PortfolioDecision back to the markdown shape the rest of the system expects.
+    """Render a PortfolioDecision to markdown matching the report parser's expected format.
 
-    Memory log, CLI display, and saved report files all read this markdown,
-    so the rendered output preserves the exact section headers (``**Rating**``,
-    ``**Executive Summary**``, ``**Investment Thesis**``) that downstream
-    parsers and the report writers already handle.
+    Output format:
+    **Rating**: <Buy/Hold/Sell/Overweight/Underweight>
+    **Executive Summary**: <2-4 sentence summary>
+    **Investment Thesis**:
+    **支撑持仓**（做多理由，3-4点）:
+    一、<理由1>
+    二、<理由2>
+    ...
+    **抑制追高**（做空/观望理由，3-4点）:
+    一、<理由1>
+    二、<理由2>
+    ...
+    【风险收益评估】:
+    <2-3句风险收益描述>
+    **时间窗口**:
+    - <催化剂1>
+    - <催化剂2>
     """
     parts = [
         f"**Rating**: {decision.rating.value}",
         "",
         f"**Executive Summary**: {decision.executive_summary}",
         "",
-        f"**Investment Thesis**: {decision.investment_thesis}",
+        "**Investment Thesis**:",
     ]
+
+    # Bull factors — output as hyphen bullets for easy parsing
+    if decision.bull_factors:
+        parts.append("**支撑持仓**（做多理由）:")
+        for factor in decision.bull_factors:
+            parts.append(f"- {factor}")
+        parts.append("")
+
+    # Bear factors
+    if decision.bear_factors:
+        parts.append("**抑制追高**（做空/观望理由）:")
+        for factor in decision.bear_factors:
+            parts.append(f"- {factor}")
+        parts.append("")
+
+    # Risk-reward assessment
+    if decision.risk_reward_text:
+        parts.extend(["【风险收益评估】:", decision.risk_reward_text, ""])
+
+    # Catalysts / time window
+    if decision.catalysts:
+        parts.append("**时间窗口**:")
+        for cat in decision.catalysts:
+            parts.append(f"- {cat}")
+        parts.append("")
+
+    # Optional fields
     if decision.price_target is not None:
-        parts.extend(["", f"**Price Target**: {decision.price_target}"])
+        parts.append(f"**Price Target**: {decision.price_target}")
     if decision.time_horizon:
-        parts.extend(["", f"**Time Horizon**: {decision.time_horizon}"])
-    return "\n".join(parts)
+        parts.append(f"**Time Horizon**: {decision.time_horizon}")
+
+    return "\n".join(parts).strip()

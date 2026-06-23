@@ -58,6 +58,14 @@
     <a href="/report/{{ task_id }}/pdf" class="text-sm bg-gray-800 hover:bg-gray-700 px-3 py-1.5 rounded-lg transition h-10 flex items-center">📕 PDF</a>
     <button type="button" onclick="if(confirm('确定删除此任务？删除后可重新发起。'))document.getElementById('delete-form').submit()"
             class="text-sm bg-gray-800 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg transition cursor-pointer h-10 flex items-center">🗑</button>
+    <button type="button" id="btn-rerun-completed"
+            class="text-sm bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg transition cursor-pointer h-10 flex items-center">
+      🔄 重跑
+    </button>
+    <button type="button" id="btn-resume"
+            class="text-sm bg-blue-700 hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg transition cursor-pointer h-10 flex items-center">
+      📦 补全
+    </button>
     {% endif %}
   </div>
 </div>
@@ -115,21 +123,198 @@
 
   {# ── Part 1: 最终决策 (Portfolio Manager) ── #}
   <div id="section-final-decision" class="bg-gray-900 border border-emerald-800 rounded-xl overflow-hidden mb-4{% if not final_trade_decision %} hidden{% endif %}">
-    <div class="px-4 py-3 border-b border-emerald-800 bg-emerald-950/30">
+    <div class="px-4 py-3 border-b border-emerald-800 bg-emerald-950/30 flex items-center gap-3 flex-wrap">
       <span class="text-sm font-semibold text-emerald-400">👔 最终决策</span>
+      {% if decision_parsed.rating %}
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold
+          {% if decision_parsed.rating_color == 'buy' %}bg-green-900 text-green-400 border border-green-700
+          {% elif decision_parsed.rating_color == 'sell' %}bg-red-900 text-red-400 border border-red-700
+          {% elif decision_parsed.rating_color == 'hold' %}bg-yellow-900 text-yellow-400 border border-yellow-700
+          {% elif decision_parsed.rating_color == 'overweight' %}bg-emerald-900 text-emerald-400 border border-emerald-700
+          {% elif decision_parsed.rating_color == 'underweight' %}bg-orange-900 text-orange-400 border border-orange-700
+          {% else %}bg-gray-800 text-gray-300 border border-gray-600{% endif %}">
+          {{ decision_parsed.rating }}
+        </span>
+      {% endif %}
+      {% if decision_parsed.price_target %}
+        <span class="text-xs text-gray-400">
+          目标价: <span class="text-emerald-400 font-semibold">{{ decision_parsed.price_target }}元</span>
+        </span>
+      {% endif %}
     </div>
-    <div class="p-6">
-      <div id="cnt-final-decision" class="report-raw prose prose-invert prose-sm max-w-none">{{ final_trade_decision or '（暂无数据）' }}</div>
+    <div class="p-4 space-y-4">
+
+      {# ── Show structured content if we have it; otherwise raw fallback ── #}
+      {% if decision_parsed.executive_summary or decision_parsed.bull_factors or decision_parsed.bear_factors or decision_parsed.thesis_sections %}
+
+        {# ── Executive Summary ── #}
+        {% if decision_parsed.executive_summary %}
+        <div>
+          <div class="text-xs font-semibold text-emerald-500 uppercase tracking-wider mb-2">Executive Summary</div>
+          <p class="text-gray-200 text-sm leading-relaxed">{{ decision_parsed.executive_summary }}</p>
+        </div>
+        {% endif %}
+
+        {# ── Bull / Bear factors grid ── #}
+        {% if decision_parsed.bull_factors or decision_parsed.bear_factors %}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {% if decision_parsed.bull_factors %}
+          <div class="bg-green-950/30 border border-green-800/50 rounded-lg p-4">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="text-green-400 text-sm font-bold">▲ 利好因素</span>
+              <span class="text-xs text-green-600 bg-green-950/60 px-2 py-0.5 rounded-full rounded-tl-none">支撑持仓</span>
+            </div>
+            <ul class="space-y-2">
+              {% for factor in decision_parsed.bull_factors %}
+              <li class="text-gray-300 text-xs leading-relaxed flex gap-2">
+                <span class="text-green-500 mt-0.5 shrink-0">•</span>
+                <span>{{ factor }}</span>
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+          {% if decision_parsed.bear_factors %}
+          <div class="bg-red-950/30 border border-red-800/50 rounded-lg p-4">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="text-red-400 text-sm font-bold">▼ 利空因素</span>
+              <span class="text-xs text-red-600 bg-red-950/60 px-2 py-0.5 rounded-full rounded-tl-none">抑制追高</span>
+            </div>
+            <ul class="space-y-2">
+              {% for factor in decision_parsed.bear_factors %}
+              <li class="text-gray-300 text-xs leading-relaxed flex gap-2">
+                <span class="text-red-500 mt-0.5 shrink-0">•</span>
+                <span>{{ factor }}</span>
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+        </div>
+        {% endif %}
+
+        {# ── Risk Reward ── #}
+        {% if decision_parsed.risk_reward_text %}
+        <div class="bg-yellow-950/20 border border-yellow-800/40 rounded-lg p-4">
+          <div class="text-xs font-semibold text-yellow-500 uppercase tracking-wider mb-2">⚖️ 风险收益评估</div>
+          <p class="text-gray-300 text-xs leading-relaxed">{{ decision_parsed.risk_reward_text }}</p>
+        </div>
+        {% endif %}
+
+        {# ── Catalysts ── #}
+        {% if decision_parsed.catalysts %}
+        <div>
+          <div class="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-2">📡 催化剂与跟踪</div>
+          <div class="space-y-1.5">
+            {% for cat in decision_parsed.catalysts %}
+            <div class="flex gap-2 text-xs text-gray-300">
+              <span class="text-blue-400 shrink-0">▸</span>
+              <span>{{ cat }}</span>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+        {# ── Investment Thesis (thesis_sections preferred over plain text) ── #}
+        {% if decision_parsed.thesis_sections %}
+        <div>
+          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">📝 投资逻辑</div>
+          <div class="space-y-3">
+            {% for section in decision_parsed.thesis_sections %}
+            <div class="bg-{{ section.color }}-950/20 border border-{{ section.color }}-900 rounded-lg p-3">
+              {% if section.title %}
+              <div class="text-xs font-semibold mb-2 text-{{ section.color }}-400">{{ section.title }}</div>
+              {% endif %}
+              <div class="text-xs text-gray-300 leading-relaxed space-y-1.5">
+                {% for line in section.lines %}
+                <p>{{ line }}</p>
+                {% endfor %}
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% elif decision_parsed.investment_thesis and not decision_parsed.bull_factors and not decision_parsed.bear_factors %}
+        <div class="text-xs text-gray-300 leading-relaxed space-y-2">
+          {% for para in decision_parsed.investment_thesis.split('\n') %}
+            {% set para = para | trim %}
+            {% if para and para | length > 10 %}
+            <p>{{ para }}</p>
+            {% endif %}
+          {% endfor %}
+        </div>
+        {% endif %}
+
+      {% else %}
+        {# ── Pure fallback: no structured fields at all — show raw markdown ── #}
+        <div id="cnt-final-decision" class="text-xs text-gray-300 leading-relaxed space-y-2">
+          {{ final_trade_decision|safe }}
+        </div>
+      {% endif %}
+
     </div>
   </div>
 
   {# ── Part 2: 交易员决策 (Trader) ── #}
   <div id="section-trader-plan" class="bg-gray-900 border border-blue-800 rounded-xl overflow-hidden mb-4{% if not trader_investment_plan %} hidden{% endif %}">
-    <div class="px-4 py-3 border-b border-blue-800 bg-blue-950/30">
+    <div class="px-4 py-3 border-b border-blue-800 bg-blue-950/30 flex items-center gap-3 flex-wrap">
       <span class="text-sm font-semibold text-blue-400">💹 交易员决策</span>
+      {% if trader_parsed.action %}
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold
+          {% if trader_parsed.action_color == 'buy' %}bg-green-900 text-green-400 border border-green-700
+          {% elif trader_parsed.action_color == 'sell' %}bg-red-900 text-red-400 border border-red-700
+          {% elif trader_parsed.action_color == 'hold' %}bg-yellow-900 text-yellow-400 border border-yellow-700
+          {% else %}bg-gray-800 text-gray-300 border border-gray-600{% endif %}">
+          {{ trader_parsed.action }}
+        </span>
+      {% endif %}
+      {% if trader_parsed.final_proposal and trader_parsed.final_proposal != trader_parsed.action %}
+        <span class="text-xs text-gray-500">→</span>
+        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-blue-900 text-blue-300 border border-blue-700">
+          {{ trader_parsed.final_proposal }}
+        </span>
+      {% endif %}
     </div>
-    <div class="p-6">
-      <div id="cnt-trader-plan" class="report-raw prose prose-invert prose-sm max-w-none">{{ trader_investment_plan or '（暂无数据）' }}</div>
+    <div class="p-4 space-y-4">
+
+      {# ── Trade params grid ── #}
+      {% if trader_parsed.entry_price or trader_parsed.stop_loss or trader_parsed.position_sizing %}
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {% if trader_parsed.entry_price %}
+        <div class="bg-blue-950/40 border border-blue-800/50 rounded-lg px-4 py-3 text-center">
+          <div class="text-xs text-blue-400 mb-1">入场价</div>
+          <div class="text-white font-bold text-lg">{{ trader_parsed.entry_price }} <span class="text-xs text-gray-400 font-normal">元</span></div>
+        </div>
+        {% endif %}
+        {% if trader_parsed.stop_loss %}
+        <div class="bg-red-950/40 border border-red-800/50 rounded-lg px-4 py-3 text-center">
+          <div class="text-xs text-red-400 mb-1">止损价</div>
+          <div class="text-white font-bold text-lg">{{ trader_parsed.stop_loss }} <span class="text-xs text-gray-400 font-normal">元</span></div>
+        </div>
+        {% endif %}
+        {% if trader_parsed.position_sizing %}
+        <div class="bg-gray-800/60 border border-gray-700/50 rounded-lg px-4 py-3 text-center col-span-2 md:col-span-1">
+          <div class="text-xs text-gray-400 mb-1">仓位建议</div>
+          <div class="text-gray-200 text-xs leading-relaxed">{{ trader_parsed.position_sizing }}</div>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {# ── Reasoning ── #}
+      {% if trader_parsed.reasoning %}
+      <div>
+        <div class="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-2">📋 决策逻辑</div>
+        <p class="text-gray-300 text-xs leading-relaxed">{{ trader_parsed.reasoning }}</p>
+      </div>
+      {% endif %}
+
+      {# ── Fallback raw markdown ── #}
+      {% if not trader_parsed.action and trader_investment_plan %}
+      <div id="cnt-trader-plan" class="report-raw prose prose-invert prose-sm max-w-none">{{ trader_investment_plan|safe }}</div>
+      {% endif %}
+
     </div>
   </div>
 
@@ -144,28 +329,26 @@
       </div>
     </div>
     <div class="p-4">
-      <div id="sub-debate-manager" class="sub-debate-panel"><div id="cnt-investment-plan" class="report-raw prose prose-invert prose-sm max-w-none">{{ investment_plan or '（暂无数据）' }}</div></div>
-      <div id="sub-debate-bull" class="sub-debate-panel hidden"><div id="cnt-debate-bull" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.bull_history or '（暂无数据）' }}</div></div>
-      <div id="sub-debate-bear" class="sub-debate-panel hidden"><div id="cnt-debate-bear" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.bear_history or '（暂无数据）' }}</div></div>
+      <div id="sub-debate-manager" class="sub-debate-panel"><div id="cnt-investment-plan" class="report-raw prose prose-invert prose-sm max-w-none">{{ investment_plan|safe if investment_plan else '（暂无数据）' }}</div></div>
+      <div id="sub-debate-bull" class="sub-debate-panel hidden"><div id="cnt-debate-bull" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.bull_history|safe if reports.bull_history else '（暂无数据）' }}</div></div>
+      <div id="sub-debate-bear" class="sub-debate-panel hidden"><div id="cnt-debate-bear" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.bear_history|safe if reports.bear_history else '（暂无数据）' }}</div></div>
     </div>
   </div>
 
-  {# ── Part 5: 风控评估 (4 sub-tabs) ── #}
+  {# ── Part 4: 风控评估 (3 sub-tabs) ── #}
   <div id="section-risk" class="bg-gray-900 border border-yellow-800 rounded-xl overflow-hidden mb-4">
     <div class="px-4 py-3 border-b border-yellow-800 bg-yellow-950/30 flex items-center gap-3">
       <span class="text-sm font-semibold text-yellow-400">🛡️ 风控评估</span>
       <div class="flex border border-yellow-700 rounded-lg overflow-hidden ml-2">
-        <button class="sub-risk-btn px-3 py-1 text-xs font-medium border-b-2 border-emerald-500 text-emerald-400" data-risk="sub-risk-aggressive">激进观点</button>
-        <button class="sub-risk-btn px-3 py-1 text-xs font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" data-risk="sub-risk-conservative">保守观点</button>
-        <button class="sub-risk-btn px-3 py-1 text-xs font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" data-risk="sub-risk-neutral">中性观点</button>
-        <button class="sub-risk-btn px-3 py-1 text-xs font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" data-risk="sub-risk-judge">风控决策</button>
+        <button class="sub-risk-btn px-3 py-1 text-xs font-medium border-b-2 border-emerald-500 text-emerald-400" data-risk="sub-risk-aggressive">激进风控</button>
+        <button class="sub-risk-btn px-3 py-1 text-xs font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" data-risk="sub-risk-conservative">保守风控</button>
+        <button class="sub-risk-btn px-3 py-1 text-xs font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200" data-risk="sub-risk-neutral">中性风控</button>
       </div>
     </div>
     <div class="p-4">
-      <div id="sub-risk-aggressive" class="sub-risk-panel"><div id="cnt-risk-aggressive" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.risk_aggressive_history or '（暂无数据）' }}</div></div>
-      <div id="sub-risk-conservative" class="sub-risk-panel hidden"><div id="cnt-risk-conservative" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.risk_conservative_history or '（暂无数据）' }}</div></div>
-      <div id="sub-risk-neutral" class="sub-risk-panel hidden"><div id="cnt-risk-neutral" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.risk_neutral_history or '（暂无数据）' }}</div></div>
-      <div id="sub-risk-judge" class="sub-risk-panel hidden"><div id="cnt-risk" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.risk_judge_decision or '（暂无数据）' }}</div></div>
+      <div id="sub-risk-aggressive" class="sub-risk-panel"><div id="cnt-risk-aggressive" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.risk_aggressive_history|safe if reports.risk_aggressive_history else '（暂无数据）' }}</div></div>
+      <div id="sub-risk-conservative" class="sub-risk-panel hidden"><div id="cnt-risk-conservative" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.risk_conservative_history|safe if reports.risk_conservative_history else '（暂无数据）' }}</div></div>
+      <div id="sub-risk-neutral" class="sub-risk-panel hidden"><div id="cnt-risk-neutral" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.risk_neutral_history|safe if reports.risk_neutral_history else '（暂无数据）' }}</div></div>
     </div>
   </div>
 
@@ -178,21 +361,21 @@
       <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-fundamentals">📋 基本面</button>
       <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-policy">🏛️ 政策</button>
       <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-hot-money">🔥 游资</button>
-      <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-lockup">🔒 解禁</button>
-      <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-quality">✅ 质量门控</button>
+      <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-other">🔒 其他</button>
+      <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-gray-200 whitespace-nowrap" data-tab="tab-quality">✅ 数据质量</button>
     </div>
 
     <div class="p-6 min-h-96" id="report-content">
       <div id="tab-market" class="tab-panel">
-        <div id="cnt-market" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.market_report or '（暂无数据）' }}</div>
+        <div id="cnt-market" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.market_report|safe if reports.market_report else '（暂无数据）' }}</div>
       </div>
-      <div id="tab-sentiment" class="tab-panel hidden"><div id="cnt-sentiment" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.sentiment_report or '（暂无数据）' }}</div></div>
-      <div id="tab-news" class="tab-panel hidden"><div id="cnt-news" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.news_report or '（暂无数据）' }}</div></div>
-      <div id="tab-fundamentals" class="tab-panel hidden"><div id="cnt-fundamentals" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.fundamentals_report or '（暂无数据）' }}</div></div>
-      <div id="tab-policy" class="tab-panel hidden"><div id="cnt-policy" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.policy_report or '（暂无数据）' }}</div></div>
-      <div id="tab-hot-money" class="tab-panel hidden"><div id="cnt-hot-money" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.hot_money_report or '（暂无数据）' }}</div></div>
-      <div id="tab-lockup" class="tab-panel hidden"><div id="cnt-lockup" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.lockup_report or '（暂无数据）' }}</div></div>
-      <div id="tab-quality" class="tab-panel hidden"><div id="cnt-quality" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.data_quality_summary or '（暂无数据）' }}</div></div>
+      <div id="tab-sentiment" class="tab-panel hidden"><div id="cnt-sentiment" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.sentiment_report|safe if reports.sentiment_report else '（暂无数据）' }}</div></div>
+      <div id="tab-news" class="tab-panel hidden"><div id="cnt-news" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.news_report|safe if reports.news_report else '（暂无数据）' }}</div></div>
+      <div id="tab-fundamentals" class="tab-panel hidden"><div id="cnt-fundamentals" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.fundamentals_report|safe if reports.fundamentals_report else '（暂无数据）' }}</div></div>
+      <div id="tab-policy" class="tab-panel hidden"><div id="cnt-policy" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.policy_report|safe if reports.policy_report else '（暂无数据）' }}</div></div>
+      <div id="tab-hot-money" class="tab-panel hidden"><div id="cnt-hot-money" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.hot_money_report|safe if reports.hot_money_report else '（暂无数据）' }}</div></div>
+      <div id="tab-other" class="tab-panel hidden"><div id="cnt-other" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.lockup_report|safe if reports.lockup_report else '（暂无数据）' }}</div></div>
+      <div id="tab-quality" class="tab-panel hidden"><div id="cnt-quality" class="report-raw prose prose-invert prose-sm max-w-none">{{ reports.data_quality_summary|safe if reports.data_quality_summary else '（暂无数据）' }}</div></div>
     </div>
   </div>
 </div>
@@ -260,13 +443,7 @@ function renderMarkdown(raw) {
   try { return marked.parse(raw); } catch (_) { return raw; }
 }
 
-// Render all report-raw elements on load
-document.querySelectorAll('.report-raw').forEach(el => {
-  const raw = (el.textContent || '').trim();
-  if (raw && raw !== '（暂无数据）') {
-    el.innerHTML = renderMarkdown(raw);
-  }
-});
+// Report content is pre-rendered server-side by mistune — no browser markdown parsing needed.
 
 // ── Update running panel ─────────────────────────────────────────────────
 function updateRunningPanel(data) {
@@ -341,7 +518,7 @@ function updateReportContent(data) {
     'cnt-fundamentals':      data.reports?.fundamentals_report,
     'cnt-policy':            data.reports?.policy_report,
     'cnt-hot-money':         data.reports?.hot_money_report,
-    'cnt-lockup':            data.reports?.lockup_report,
+    'cnt-other':            data.reports?.lockup_report,
     'cnt-quality':           data.reports?.data_quality_summary,
   };
   Object.entries(map).forEach(([id, raw]) => {
@@ -359,7 +536,6 @@ function updateReportContent(data) {
     { elId: 'cnt-risk-aggressive',    secId: null,                    raw: data.reports?.risk_aggressive_history },
     { elId: 'cnt-risk-conservative',  secId: null,                    raw: data.reports?.risk_conservative_history },
     { elId: 'cnt-risk-neutral',       secId: null,                    raw: data.reports?.risk_neutral_history },
-    { elId: 'cnt-risk',               secId: null,                    raw: data.reports?.risk_judge_decision },
   ];
   topSections.forEach(({ elId, secId, raw }) => {
     if (!raw) return;
@@ -448,6 +624,52 @@ document.getElementById('btn-rerun-error')?.addEventListener('click', async func
   }
   const data = await resp.json();
   window.location.href = `/report/${data.task_id}`;
+});
+document.getElementById('btn-rerun-completed')?.addEventListener('click', async function () {
+  if (!confirm('确定要重新分析？')) return;
+  this.disabled = true;
+  this.textContent = '正在重启…';
+  const resp = await fetch(`/tasks/${TASK_ID}/rerun`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (resp.status === 401 || resp.status === 403) {
+    window.location.href = '/auth/login';
+    return;
+  }
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    alert('重启失败: ' + (err.detail || resp.status));
+    this.disabled = false;
+    this.textContent = '🔄 重跑';
+    return;
+  }
+  const data = await resp.json();
+  window.location.href = `/report/${data.task_id}`;
+});
+document.getElementById('btn-resume')?.addEventListener('click', async function () {
+  if (!confirm('确定要补全此任务？')) return;
+  this.disabled = true;
+  this.textContent = '正在补全…';
+  const resp = await fetch(`/tasks/${TASK_ID}/resume`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (resp.status === 401 || resp.status === 403) {
+    window.location.href = '/auth/login';
+    return;
+  }
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    alert('补全失败: ' + (err.detail || resp.status));
+    this.disabled = false;
+    this.textContent = '📦 补全';
+    return;
+  }
+  const data = await resp.json();
+  // Poll until task completes, then refresh
+  poll();
+  document.getElementById('running-panel').classList.remove('hidden');
 });
 
 

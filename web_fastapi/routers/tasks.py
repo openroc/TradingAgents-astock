@@ -295,6 +295,43 @@ def rerun_task(
     return {"task_id": new_id, "ticker": old_task.ticker, "status": "pending"}
 
 
+@router.post("/{task_id}/resume")
+def resume_task(
+    task_id: str,
+    session: Session = Depends(auth.get_current_user),
+):
+    """Resume an interrupted task from its checkpoint. Reuses the same task_id."""
+    from web_fastapi.task_store import get_store_for_task
+    from web_fastapi.runner import start_resume_analysis
+    from web_fastapi.config import build_config
+    from tradingagents.graph.checkpointer import has_checkpoint
+
+    store, old_task = get_store_for_task(task_id)
+    if old_task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if old_task.user_id != session.user_id and not session.is_admin:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # Check if checkpoint exists for this ticker+date
+    config = old_task.config or {}
+    data_dir = config.get("data_cache_dir", os.path.expanduser("~/.tradingagents/cache"))
+    if not has_checkpoint(data_dir, old_task.ticker, old_task.trade_date):
+        raise HTTPException(
+            status_code=409,
+            detail="该任务无断点记录，无法补全，请使用重跑",
+        )
+
+    # Reuse same task_id, just restart it
+    old_task.config["checkpoint_enabled"] = True
+    start_resume_analysis(
+        task_id,
+        old_task.ticker,
+        old_task.trade_date,
+        old_task.config,
+    )
+    return {"task_id": task_id, "ticker": old_task.ticker, "status": "running"}
+
+
 @router.post("/{task_id}/abort")
 def abort_task(
     task_id: str,

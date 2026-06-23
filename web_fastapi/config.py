@@ -60,6 +60,7 @@ def build_config(
         "max_debate_rounds": max_debate_rounds,
         "max_risk_discuss_rounds": max_risk_discuss_rounds,
         "output_language": output_language,
+        "checkpoint_enabled": True,
     })
     if data_vendors:
         config["data_vendors"] = data_vendors
