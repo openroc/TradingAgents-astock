@@ -186,6 +186,7 @@ class GraphSetup:
             "Aggressive Analyst",
             self.conditional_logic.should_continue_risk_analysis,
             {
+                "Judge": END,
                 "Conservative Analyst": "Conservative Analyst",
                 "Portfolio Manager": "Portfolio Manager",
             },
@@ -194,6 +195,7 @@ class GraphSetup:
             "Conservative Analyst",
             self.conditional_logic.should_continue_risk_analysis,
             {
+                "Judge": END,
                 "Neutral Analyst": "Neutral Analyst",
                 "Portfolio Manager": "Portfolio Manager",
             },
@@ -202,6 +204,7 @@ class GraphSetup:
             "Neutral Analyst",
             self.conditional_logic.should_continue_risk_analysis,
             {
+                "Judge": END,
                 "Aggressive Analyst": "Aggressive Analyst",
                 "Portfolio Manager": "Portfolio Manager",
             },

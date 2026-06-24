@@ -215,26 +215,14 @@ class PortfolioDecision(BaseModel):
     )
 
 
+CHINESE_NUMS = ["一", "二", "三", "四", "五", "六", "七", "八"]
+
+
 def render_pm_decision(decision: PortfolioDecision) -> str:
     """Render a PortfolioDecision to markdown matching the report parser's expected format.
 
-    Output format:
-    **Rating**: <Buy/Hold/Sell/Overweight/Underweight>
-    **Executive Summary**: <2-4 sentence summary>
-    **Investment Thesis**:
-    **支撑持仓**（做多理由，3-4点）:
-    一、<理由1>
-    二、<理由2>
-    ...
-    **抑制追高**（做空/观望理由，3-4点）:
-    一、<理由1>
-    二、<理由2>
-    ...
-    【风险收益评估】:
-    <2-3句风险收益描述>
-    **时间窗口**:
-    - <催化剂1>
-    - <催化剂2>
+    Output format mirrors the PM prompt's Required Output Format so that
+    _parse_final_decision() can reliably extract structured fields.
     """
     parts = [
         f"**Rating**: {decision.rating.value}",
@@ -244,18 +232,20 @@ def render_pm_decision(decision: PortfolioDecision) -> str:
         "**Investment Thesis**:",
     ]
 
-    # Bull factors — output as hyphen bullets for easy parsing
+    # Bull factors — use Chinese numeral format exactly as PM prompt instructs
     if decision.bull_factors:
-        parts.append("**支撑持仓**（做多理由）:")
-        for factor in decision.bull_factors:
-            parts.append(f"- {factor}")
+        parts.append("**支撑持仓**（做多理由，3-4点，每点以一、二、三、序号）:")
+        for i, factor in enumerate(decision.bull_factors):
+            if i < len(CHINESE_NUMS):
+                parts.append(f"{CHINESE_NUMS[i]}、{factor}")
         parts.append("")
 
     # Bear factors
     if decision.bear_factors:
-        parts.append("**抑制追高**（做空/观望理由）:")
-        for factor in decision.bear_factors:
-            parts.append(f"- {factor}")
+        parts.append("**抑制追高**（做空/观望理由，3-4点，每点以一、二、三、序号）:")
+        for i, factor in enumerate(decision.bear_factors):
+            if i < len(CHINESE_NUMS):
+                parts.append(f"{CHINESE_NUMS[i]}、{factor}")
         parts.append("")
 
     # Risk-reward assessment

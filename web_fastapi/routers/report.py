@@ -10,7 +10,6 @@ from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
 from pathlib import Path
 
-from web_fastapi.task_store import get_store
 from web_fastapi import auth
 from web_fastapi.auth import Session
 from web_fastapi.runner import _html_text  # strips think tags, preserves \n
@@ -25,8 +24,14 @@ router = APIRouter(prefix="/report", tags=["report"])
 
 
 def _check_access(task_id: str, session) -> object:
-    """Verify the session has access to the task. Returns the task."""
-    task = get_store(session.user_id).get_task(task_id)
+    """Verify the session has access to the task. Returns the task.
+
+    Uses get_store_for_task to find the task across all user stores,
+    then verifies the current session's user owns it (or is admin).
+    """
+    from web_fastapi.task_store import get_store_for_task
+
+    store, task = get_store_for_task(task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
     if task.user_id != session.user_id and not session.is_admin:
@@ -240,24 +245,63 @@ def _parse_trader_plan(raw: str) -> dict:
     if not raw:
         return {}
 
+    # Strip MiniMax/LLM thinking blocks before parsing
+    raw = re.sub(r"<think>[\s\S]*?</think>", "", raw).strip()
+
     action_match = re.search(r"\*\*Action\*\*:\s*(.+?)(?:\n|$)", raw, re.IGNORECASE)
     entry_match = re.search(r"\*\*Entry Price\*\*:\s*([\d.]+)", raw, re.IGNORECASE)
     stop_match = re.search(r"\*\*Stop Loss\*\*:\s*([\d.]+)", raw, re.IGNORECASE)
     sizing_match = re.search(r"\*\*Position Sizing\*\*:\s*(.+?)(?=\n{2,}FINAL|\Z)", raw, re.DOTALL | re.IGNORECASE)
+    # Fallback: extract sizing from **总仓位上限** table
+    if not sizing_match:
+        sizing_match = re.search(r"\*\*(?:总仓位上限|仓位上限)\*\*.*?\|\s*([^\n|]+)", raw)
+    # Fallback: extract sizing from **上限** row: | **上限** | — | **70%** | 单票仓位上限约束 |
+    if not sizing_match:
+        sizing_match = re.search(r"\*\*上限\*\*.*?\|\s*—\s*\|\s*\*\*?([^\*]+)\*\*?", raw)
     final_match = re.search(r"FINAL TRANSACTION PROPOSAL:\s*\*\*?(.+?)\*\*?\s*$", raw, re.IGNORECASE | re.MULTILINE)
     reasoning_match = re.search(r"\*\*Reasoning\*\*:\s*(.+?)(?=\n\*\*Entry|\nFINAL|\Z)", raw, re.DOTALL | re.IGNORECASE)
 
     # Try to extract action from table rows (format: "买入/推荐" in table)
     if not action_match:
-        action_match = re.search(r"(?:推荐操作|交易方向|委托方向)[:：]\s*([^\s|]+)", raw)
+        action_match = re.search(r"(?:推荐操作|交易方向|委托方向|建议方向)[:：]\s*([^\s|]+)", raw)
+    # Try to extract action from **建议方向** table field: | **建议方向** | 短线/波段做多（不推荐长持） |
+    if not action_match:
+        m = re.search(r"\*\*(?:建议方向)\*\*.*?\|\s*([^\n|]+)", raw)
+        if m:
+            action_match = m
+    # Try from section heading: ### 2.1 交易方向：**做多（买入）**
+    if not action_match:
+        m = re.search(r"交易方向[：:]\*\*([^\*]+)\*\*", raw)
+        if m:
+            action_match = m
+    # Fallback: scan tables for action keywords
+    if not action_match:
+        for kw in (r"做多", r"买入", r"开多", r"短线做多"):
+            m = re.search(rf"\|.*{kw}.*\|", raw)
+            if m:
+                action_match = re.search(rf"({kw}[^\|]*)", m.group(0))
+                break
     # Try to extract entry price from table cells
     if not entry_match:
         entry_match = re.search(r"(?:入场|建仓)(?:价格|价|区间)?[:：]\s*([\d.]+)", raw)
+    # Try from **建仓区间** / **首次建仓** table fields
+    if not entry_match:
+        # Match | **建仓区间** | 135～145元（分批） | or | **首次建仓** | 20%仓位，约140元 |
+        entry_match = re.search(r"\*\*(?:建仓区间|首次建仓)\*\*.*?\|\s*([\d.]+)", raw)
+    # Try from **底仓** row: | **底仓** | 138-145元 | 30% |
+    if not entry_match:
+        entry_match = re.search(r"底仓.*?\|\s*([\d.]+)", raw)
     # Try to extract stop loss from table cells
     if not stop_match:
         stop_match = re.search(r"(?:止损)(?:价|位)?[:：]\s*([\d.]+)", raw)
+    # Try from **硬止损** table field: | **硬止损** | **125元** |
+    if not stop_match:
+        stop_match = re.search(r"\*\*(?:硬止损|止损)\*\*.*?\*\*?([\d.]+)元", raw)
+    # Try from **固定止损** table row: | **固定止损** | 125元 |
+    if not stop_match:
+        stop_match = re.search(r"固定止损.*?\|\s*([^元\n]+)元", raw)
 
-    action = action_match.group(1).strip() if action_match else ""
+    action = action_match.group(1).strip().replace("**", "") if action_match else ""
     final_proposal = final_match.group(1).strip() if final_match else action
 
     action_upper = action.upper()
@@ -276,7 +320,7 @@ def _parse_trader_plan(raw: str) -> dict:
         "final_proposal": final_proposal,
         "entry_price": entry_match.group(1).strip() if entry_match else None,
         "stop_loss": stop_match.group(1).strip() if stop_match else None,
-        "position_sizing": sizing_match.group(1).strip().replace("\n", " ") if sizing_match else None,
+        "position_sizing": sizing_match.group(1).strip().replace("\n", " ").replace("**", "") if sizing_match else None,
         "reasoning": reasoning_match.group(1).strip() if reasoning_match else None,
     }
 

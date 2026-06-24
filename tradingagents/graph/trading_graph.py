@@ -47,7 +47,13 @@ from tradingagents.agents.utils.agent_utils import (
     get_industry_comparison,
 )
 
-from .checkpointer import checkpoint_step, clear_checkpoint, get_checkpointer, thread_id
+from .checkpointer import (
+    checkpoint_step,
+    clear_checkpoint,
+    get_checkpointer,
+    get_execution_logger,
+    thread_id,
+)
 from .conditional_logic import ConditionalLogic
 from .setup import GraphSetup
 from .propagation import Propagator
@@ -310,33 +316,36 @@ class TradingAgentsGraph:
         # Resolve any pending memory-log entries for this ticker before the pipeline runs.
         self._resolve_pending_entries(company_name)
 
+        # Execution logger for errors/warnings (one file per ticker+date).
+        data_dir = self.config.get("data_cache_dir", os.path.expanduser("~/.tradingagents/cache"))
+        exec_logger = get_execution_logger(data_dir, company_name, str(trade_date))
+
         # Recompile with a checkpointer if the user opted in.
         if self.config.get("checkpoint_enabled"):
-            self._checkpointer_ctx = get_checkpointer(
-                self.config["data_cache_dir"], company_name
-            )
+            self._checkpointer_ctx = get_checkpointer(data_dir, company_name)
             saver = self._checkpointer_ctx.__enter__()
             self.graph = self.workflow.compile(checkpointer=saver)
 
-            step = checkpoint_step(
-                self.config["data_cache_dir"], company_name, str(trade_date)
-            )
+            step = checkpoint_step(data_dir, company_name, str(trade_date))
             if step is not None:
-                logger.info(
-                    "Resuming from step %d for %s on %s", step, company_name, trade_date
-                )
+                msg = f"Resuming from step {step} for {company_name} on {trade_date}"
+                logger.info(msg)
+                exec_logger.info(msg)
             else:
-                logger.info("Starting fresh for %s on %s", company_name, trade_date)
+                msg = f"Starting fresh for {company_name} on {trade_date}"
+                logger.info(msg)
+                exec_logger.info(msg)
 
         try:
-            return self._run_graph(company_name, trade_date)
+            return self._run_graph(company_name, trade_date, exec_logger)
         finally:
+            exec_logger.close()
             if self._checkpointer_ctx is not None:
                 self._checkpointer_ctx.__exit__(None, None, None)
                 self._checkpointer_ctx = None
                 self.graph = self.workflow.compile()
 
-    def _run_graph(self, company_name, trade_date):
+    def _run_graph(self, company_name, trade_date, exec_logger=None):
         """Execute the graph and write the resulting state to disk and memory log."""
         # Initialize state — inject memory log context for PM.
         past_context = self.memory_log.get_past_context(company_name)
@@ -350,17 +359,24 @@ class TradingAgentsGraph:
             tid = thread_id(company_name, str(trade_date))
             args.setdefault("config", {}).setdefault("configurable", {})["thread_id"] = tid
 
-        if self.debug:
-            trace = []
-            for chunk in self.graph.stream(init_agent_state, **args):
-                if len(chunk["messages"]) == 0:
-                    pass
-                else:
-                    chunk["messages"][-1].pretty_print()
-                    trace.append(chunk)
-            final_state = trace[-1]
-        else:
-            final_state = self.graph.invoke(init_agent_state, **args)
+        try:
+            if self.debug:
+                trace = []
+                for chunk in self.graph.stream(init_agent_state, **args):
+                    if len(chunk["messages"]) == 0:
+                        pass
+                    else:
+                        chunk["messages"][-1].pretty_print()
+                        trace.append(chunk)
+                final_state = trace[-1]
+            else:
+                final_state = self.graph.invoke(init_agent_state, **args)
+        except Exception as exc:
+            msg = f"[CRASH] Graph invocation failed: {type(exc).__name__}: {exc}"
+            logger.exception(msg)
+            if exec_logger:
+                exec_logger.error(msg)
+            raise
 
         # Store current state for reflection.
         self.curr_state = final_state

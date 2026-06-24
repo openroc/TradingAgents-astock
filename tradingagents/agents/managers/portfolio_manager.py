@@ -11,6 +11,9 @@ back gracefully to free-text generation.
 from __future__ import annotations
 
 import logging
+import os
+from datetime import datetime
+from pathlib import Path
 
 from tradingagents.agents.schemas import PortfolioDecision, render_pm_decision
 from tradingagents.agents.utils.agent_utils import (
@@ -20,6 +23,31 @@ from tradingagents.agents.utils.agent_utils import (
 from tradingagents.agents.utils.structured import bind_structured
 
 logger = logging.getLogger(__name__)
+
+
+def _save_failed_pm_prompt(
+    ticker: str, trade_date: str, task_id: str, prompt: str, error: str
+) -> None:
+    """Save the PM prompt that failed to a file for debugging."""
+    try:
+        cache_dir = os.path.expanduser("~/.tradingagents/cache")
+        failed_dir = Path(cache_dir) / "failed_pm_prompts"
+        failed_dir.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = failed_dir / f"pm_failed_{ticker}_{trade_date}_{task_id}_{ts}.txt"
+        content = (
+            f"=== PM Prompt That Failed ===\n"
+            f"Ticker: {ticker}\n"
+            f"Trade Date: {trade_date}\n"
+            f"Task ID: {task_id}\n"
+            f"Timestamp: {ts}\n"
+            f"Error: {error}\n"
+            f"\n=== Prompt Content ===\n{prompt}"
+        )
+        filename.write_text(content, encoding="utf-8")
+        logger.info("Failed PM prompt saved to: %s", filename)
+    except Exception as exc:
+        logger.warning("Failed to save failed PM prompt: %s", exc)
 
 
 def create_portfolio_manager(llm):
@@ -109,8 +137,23 @@ Be decisive and ground every conclusion in specific evidence from the analysts.{
                 "retrying once as free text",
                 exc,
             )
-            response = llm.invoke(prompt)
-            decision = getattr(response, "content", str(response))
+            # Save the prompt for debugging when structured call fails
+            ticker = state.get("company_of_interest", "unknown")
+            trade_date = state.get("trade_date", "unknown")
+            _save_failed_pm_prompt(state["company_of_interest"], trade_date, state.get("task_id", ""), prompt, str(exc))
+            try:
+                response = llm.invoke(prompt)
+                decision = getattr(response, "content", str(response))
+            except Exception as exc2:
+                logger.error(
+                    "Portfolio Manager: free-text fallback also failed (%s). "
+                    "Propagating error so task is marked as failed (not completed).",
+                    exc2,
+                )
+                _save_failed_pm_prompt(ticker, trade_date, state.get("task_id", ""), prompt, f"{exc} | freetext: {exc2}")
+                # Re-raise so the task is marked as error, not completed.
+                # This preserves the checkpoint so resume can recover.
+                raise RuntimeError(f"Portfolio Manager failed: {exc} | freetext: {exc2}") from exc2
 
         # Render the PM's final decision to markdown (used in PM tab and memory log)
         if isinstance(decision, PortfolioDecision):
@@ -119,7 +162,7 @@ Be decisive and ground every conclusion in specific evidence from the analysts.{
             # derived from the structured fields — distinct from the full investment plan
             judge_decision = (
                 f"**Rating**: {decision.rating.value}\n\n"
-                f"**Investment Thesis**:\n{decision.investment_thesis}"
+                f"**Executive Summary**: {decision.executive_summary}"
             )
         else:
             # Free-text fallback: two outputs are identical (no structured fields to split)

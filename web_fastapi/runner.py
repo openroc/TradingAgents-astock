@@ -30,6 +30,9 @@ def run_analysis(task_id: str, ticker: str, trade_date: str, config: dict) -> No
     task.tracker.mark_stage_active("market")
 
     stats = StatsCallbackHandler()
+    from tradingagents.graph.checkpointer import get_execution_logger
+    data_dir = config.get("data_cache_dir", os.path.expanduser("~/.tradingagents/cache"))
+    exec_logger = get_execution_logger(data_dir, ticker, trade_date)
 
     try:
         graph = TradingAgentsGraph(
@@ -38,24 +41,41 @@ def run_analysis(task_id: str, ticker: str, trade_date: str, config: dict) -> No
             callbacks=[stats],
         )
 
-        init_state = graph.propagator.create_initial_state(ticker, trade_date)
+        exec_logger.info(f"[ANALYSIS] Starting for {ticker} {trade_date}, task_id={task_id}")
+
+        init_state = graph.propagator.create_initial_state(ticker, trade_date, task_id=task_id)
         graph_args = graph.propagator.get_graph_args(callbacks=[stats])
 
         last_chunk: dict[str, Any] = {}
 
-        for chunk in graph.graph.stream(init_state, **graph_args):
-            last_chunk = chunk
-            _update_tracker(chunk, task.tracker)
-            s = stats.get_stats()
-            task.tracker.update_stats(
-                s["llm_calls"], s["tool_calls"], s["tokens_in"], s["tokens_out"]
-            )
-            # Persist tracker state periodically so the UI sees live updates
-            store.sync_tracker(task_id, task.tracker)
+        try:
+            for chunk in graph.graph.stream(init_state, **graph_args):
+                last_chunk = chunk
+                _update_tracker(chunk, task.tracker)
+                s = stats.get_stats()
+                task.tracker.update_stats(
+                    s["llm_calls"], s["tool_calls"], s["tokens_in"], s["tokens_out"]
+                )
+                # Persist tracker state periodically so the UI sees live updates
+                store.sync_tracker(task_id, task.tracker)
+        except Exception as exc:
+            exec_logger.error(f"[ANALYSIS] Graph stream failed: {type(exc).__name__}: {exc}")
+            raise
 
-        signal = graph.process_signal(
-            last_chunk.get("final_trade_decision", "")
-        )
+        exec_logger.info(f"[ANALYSIS] Completed for {ticker} {trade_date}")
+
+        # Guard: PM stage must have produced a final_trade_decision.
+        # If it's missing/empty, the task is incomplete — do NOT mark completed
+        # so the checkpoint is preserved for resume.
+        ftd = last_chunk.get("final_trade_decision")
+        if not ftd or not str(ftd).strip():
+            exec_logger.error("[ANALYSIS] final_trade_decision is empty — PM stage did not produce output. Raising error so task is not incorrectly marked completed.")
+            raise RuntimeError(
+                "Portfolio Manager did not produce final_trade_decision. "
+                "Task left in error state with checkpoint preserved for resume."
+            )
+
+        signal = graph.process_signal(ftd)
 
         # Convert all text fields to HTML-safe form for the web UI:
         # <think> tags removed, newlines → <br>
@@ -120,6 +140,8 @@ def run_analysis(task_id: str, ticker: str, trade_date: str, config: dict) -> No
 
     except Exception as exc:
         logger.exception("[%s] Analysis failed", task_id)
+        if "exec_logger" in dir():
+            exec_logger.error(f"[ANALYSIS] FAILED: {type(exc).__name__}: {exc}")
         task.tracker.mark_error(str(exc))
         task.tracker.is_running = False
 
@@ -130,7 +152,7 @@ def run_analysis(task_id: str, ticker: str, trade_date: str, config: dict) -> No
             from web_fastapi.user_store import get_user_by_id
             billing = get_billing_store(task.user_id)
             model_name = task.config.get("deep_think_llm", "unknown")
-            user_store_module._load()  # reload so user pricing changes take effect without restart
+            user_store_module._load()
             user = get_user_by_id(task.user_id)
             user_pricing = None
             if user and user.input_price_per_million and user.output_price_per_million:
@@ -150,6 +172,10 @@ def run_analysis(task_id: str, ticker: str, trade_date: str, config: dict) -> No
             logger.warning("[%s] Failed to record billing for failed task: %s", task_id, billing_exc)
 
         store.update_status(task_id, "error", error=str(exc))
+
+    finally:
+        if "exec_logger" in dir() and exec_logger is not None:
+            exec_logger.close()
 
 
 def _save_report_to_disk(state: dict, ticker: str, trade_date: str) -> None:
@@ -289,8 +315,9 @@ def start_analysis(task_id: str, ticker: str, trade_date: str, config: dict) -> 
 
 
 def resume_analysis(task_id: str, ticker: str, trade_date: str, config: dict) -> None:
-    """Resume a task from its checkpoint. Uses graph.begin() which auto-resumes."""
+    """Resume a task from its checkpoint. Uses graph.propagate() which auto-resumes."""
     from tradingagents.graph.trading_graph import TradingAgentsGraph
+    from tradingagents.graph.checkpointer import get_execution_logger
     from cli.stats_handler import StatsCallbackHandler
     from web_fastapi.task_store import get_store_for_task
     from web.progress import PIPELINE_STAGES
@@ -306,6 +333,8 @@ def resume_analysis(task_id: str, ticker: str, trade_date: str, config: dict) ->
     task.tracker.mark_stage_active("resume")
 
     stats = StatsCallbackHandler()
+    data_dir = config.get("data_cache_dir", os.path.expanduser("~/.tradingagents/cache"))
+    exec_logger = get_execution_logger(data_dir, ticker, trade_date)
 
     try:
         graph = TradingAgentsGraph(
@@ -314,21 +343,26 @@ def resume_analysis(task_id: str, ticker: str, trade_date: str, config: dict) ->
             callbacks=[stats],
         )
 
-        # begin() handles checkpoint detection and auto-resume
-        last_chunk = graph.begin(ticker, trade_date)
+        exec_logger.info(f"[RESUME] Starting resume for {ticker} {trade_date}, task_id={task_id}")
+        # propagate() handles checkpoint detection, error logging, and auto-resume;
+        # it returns (final_state, signal).
+        last_chunk, signal = graph.propagate(ticker, trade_date)
+        exec_logger.info(f"[RESUME] Completed for {ticker} {trade_date}")
 
-        signal = graph.process_signal(
-            last_chunk.get("final_trade_decision", "")
-        )
+        # Guard: same check as run_analysis — PM must have produced output
+        ftd = last_chunk.get("final_trade_decision")
+        if not ftd or not str(ftd).strip():
+            exec_logger.error("[RESUME] final_trade_decision is empty after resume. Raising error.")
+            raise RuntimeError(
+                "Portfolio Manager did not produce final_trade_decision on resume. "
+                "Task left in error state."
+            )
 
         _htmlify_chunk(last_chunk)
 
         task.tracker.mark_complete(last_chunk, signal)
         task.tracker.is_running = False
         task.tracker.is_complete = True
-
-        graph.ticker = ticker
-        graph._log_state(trade_date, last_chunk)
 
         report_summary = {
             "signal": signal,
@@ -341,7 +375,6 @@ def resume_analysis(task_id: str, ticker: str, trade_date: str, config: dict) ->
         # Clear checkpoint after successful completion
         try:
             from tradingagents.graph.checkpointer import clear_checkpoint
-            data_dir = config.get("data_cache_dir", os.path.expanduser("~/.tradingagents/cache"))
             clear_checkpoint(data_dir, ticker, trade_date)
         except Exception as exc:
             logger.warning("[%s] Failed to clear checkpoint: %s", task_id, exc)
@@ -381,10 +414,14 @@ def resume_analysis(task_id: str, ticker: str, trade_date: str, config: dict) ->
 
     except Exception as exc:
         logger.exception("[%s] Resume failed", task_id)
+        exec_logger.error(f"[RESUME] FAILED: {type(exc).__name__}: {exc}")
         task.tracker.mark_error(str(exc))
         task.tracker.is_running = False
         task.tracker.is_complete = True
         store.update_status(task_id, "error", error=str(exc))
+
+    finally:
+        exec_logger.close()
 
 
 def start_resume_analysis(task_id: str, ticker: str, trade_date: str, config: dict) -> threading.Thread:

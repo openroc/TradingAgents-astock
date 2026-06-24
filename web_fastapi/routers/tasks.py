@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import threading
 import time
 from collections import defaultdict
@@ -15,7 +16,7 @@ from starlette.requests import Request as StarletteRequest
 from pydantic import BaseModel, Field
 from pathlib import Path
 
-from web_fastapi.task_store import get_store
+from web_fastapi.task_store import get_store, get_store_for_task
 from web_fastapi.config import build_config
 from web_fastapi import auth
 from web_fastapi.auth import Session
@@ -192,7 +193,7 @@ def get_task_status(
     session: Session = Depends(auth.get_current_user),
 ) -> TaskStatusResponse:
     """Poll the current status of an analysis task."""
-    task = get_store(session.user_id).get_task(task_id)
+    store, task = get_store_for_task(task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
     if task.user_id != session.user_id and not session.is_admin:
@@ -233,8 +234,7 @@ def delete_task_post(
     session: Session = Depends(auth.get_current_user),
 ):
     """Delete a task. Form submit redirects to /tasks; AJAX returns JSON."""
-    store = get_store(session.user_id)
-    task = store.get_task(task_id)
+    store, task = get_store_for_task(task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
     if task.user_id != session.user_id and not session.is_admin:
@@ -254,8 +254,7 @@ def rerun_task(
     session: Session = Depends(auth.get_current_user),
 ):
     """Delete the old task and start a new one with the same parameters."""
-    store = get_store(session.user_id)
-    old_task = store.get_task(task_id)
+    old_store, old_task = get_store_for_task(task_id)
     if old_task is None:
         raise HTTPException(status_code=404, detail="Task not found")
     if old_task.user_id != session.user_id and not session.is_admin:
@@ -275,12 +274,12 @@ def rerun_task(
             quick_think_llm=user.default_model,
         )
 
-    # Delete old task first (in case its status is stuck on "running")
-    store.delete_task(task_id)
+    # Delete old task from its owner's store (in case its status is stuck on "running")
+    old_store.delete_task(task_id)
 
-    # create_task now handles concurrency/queue automatically
+    # create_task now handles concurrency/queue automatically under current user
     try:
-        new_id = store.create_task(
+        new_id = get_store(session.user_id).create_task(
             session.user_id,
             old_task.ticker,
             old_task.trade_date,
@@ -301,9 +300,7 @@ def resume_task(
     session: Session = Depends(auth.get_current_user),
 ):
     """Resume an interrupted task from its checkpoint. Reuses the same task_id."""
-    from web_fastapi.task_store import get_store_for_task
     from web_fastapi.runner import start_resume_analysis
-    from web_fastapi.config import build_config
     from tradingagents.graph.checkpointer import has_checkpoint
 
     store, old_task = get_store_for_task(task_id)
@@ -338,8 +335,7 @@ def abort_task(
     session: Session = Depends(auth.get_current_user),
 ):
     """Mark a stuck running task as aborted (e.g. process was killed)."""
-    store = get_store(session.user_id)
-    task = store.get_task(task_id)
+    store, task = get_store_for_task(task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
     if task.user_id != session.user_id and not session.is_admin:
