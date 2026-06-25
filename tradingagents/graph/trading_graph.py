@@ -164,6 +164,11 @@ class TradingAgentsGraph:
             if effort:
                 kwargs["effort"] = effort
 
+        elif provider == "minimax":
+            reasoning_effort = self.config.get("minimax_reasoning_effort")
+            if reasoning_effort:
+                kwargs["reasoning_effort"] = reasoning_effort
+
         return kwargs
 
     def _create_tool_nodes(self) -> Dict[str, ToolNode]:

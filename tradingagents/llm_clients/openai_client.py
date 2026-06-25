@@ -29,6 +29,17 @@ class NormalizedChatOpenAI(ChatOpenAI):
     def with_structured_output(self, schema, *, method=None, **kwargs):
         if method is None:
             method = "function_calling"
+        # MiniMax thinking mode (when enabled) does not support tool_choice.
+        # Only block if reasoning_effort is set (meaning thinking mode is active).
+        if (
+            self.model_name and self.model_name.lower().startswith("minimax")
+            and getattr(self, "reasoning_effort", None)
+        ):
+            raise NotImplementedError(
+                "MiniMax thinking mode does not support tool_choice; "
+                "structured output is unavailable. Agent factories fall back "
+                "to free-text generation automatically."
+            )
         return super().with_structured_output(schema, method=method, **kwargs)
 
 
@@ -100,17 +111,6 @@ class DeepSeekChatOpenAI(NormalizedChatOpenAI):
                 "deepseek-reasoner does not support tool_choice; structured "
                 "output is unavailable. Agent factories fall back to "
                 "free-text generation automatically."
-            )
-        # MiniMax thinking mode (when enabled) does not support tool_choice either.
-        # Only block if reasoning_effort is set (meaning thinking mode is active).
-        if (
-            self.model_name and self.model_name.lower().startswith("minimax")
-            and getattr(self, "reasoning_effort", None)
-        ):
-            raise NotImplementedError(
-                "MiniMax thinking mode does not support tool_choice; "
-                "structured output is unavailable. Agent factories fall back "
-                "to free-text generation automatically."
             )
         return super().with_structured_output(schema, method=method, **kwargs)
 
