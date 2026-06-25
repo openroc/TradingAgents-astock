@@ -88,7 +88,11 @@ def _build_name_code_map() -> tuple[dict[str, str], dict[str, str]]:
     c2n: dict[str, str] = {}
 
     for market in (0, 1):  # 0=SZ, 1=SH
-        stocks = client.stocks(market=market)
+        try:
+            stocks = client.stocks(market=market)
+        except Exception as exc:
+            logger.warning("Failed to fetch stocks for market %d: %s", market, exc)
+            continue
         if stocks is None or stocks.empty:
             continue
         for _, row in stocks.iterrows():

@@ -54,6 +54,11 @@ def _parse_final_decision(raw: str) -> dict:
     if not raw:
         return {}
 
+    # Truncate at **更多** marker: everything after is free-form, keep only strict format block
+    more_marker = re.search(r"\*\*更多\*\*", raw)
+    if more_marker:
+        raw = raw[:more_marker.start()]
+
     # Extract Rating
     rating_match = re.search(r"\*?\*?Rating\*?\*?:\s*(.+?)(?:\n|$)", raw, re.IGNORECASE)
 
@@ -248,6 +253,23 @@ def _parse_trader_plan(raw: str) -> dict:
     # Strip MiniMax/LLM thinking blocks before parsing
     raw = re.sub(r"<think>[\s\S]*?</think>", "", raw).strip()
 
+
+    # Truncate at **更多** marker OR </format> tag:
+    # everything before it is the strict format block for parsing,
+    # everything after (including 更多 section or <detail>) is kept for raw markdown display
+    more_marker = re.search(r"\*\*更多\*\*", raw)
+    format_end = re.search(r"</format>", raw, re.IGNORECASE)
+    truncate_at = None
+    if format_end:
+        truncate_at = format_end.start()
+    if more_marker and (truncate_at is None or more_marker.start() < truncate_at):
+        truncate_at = more_marker.start()
+    if truncate_at is not None:
+        raw = raw[:truncate_at]
+    more_marker = re.search(r"\*\*更多\*\*", raw)
+    if more_marker:
+        raw = raw[:more_marker.start()]
+
     action_match = re.search(r"\*\*Action\*\*:\s*(.+?)(?:\n|$)", raw, re.IGNORECASE)
     # Entry Price: supports both "35.00元" and "35.00-36.00元" range
     entry_match = re.search(r"\*\*Entry Price\*\*:\s*([\d.～-]+元)", raw, re.IGNORECASE)
@@ -255,14 +277,18 @@ def _parse_trader_plan(raw: str) -> dict:
         entry_match = re.search(r"\*\*Entry Price\*\*:\s*([\d.]+)", raw, re.IGNORECASE)
     # Stop Loss: always has "元" suffix
     stop_match = re.search(r"\*\*Stop Loss\*\*:\s*([\d.]+)元", raw, re.IGNORECASE)
-    sizing_match = re.search(r"\*\*Position Sizing\*\*:\s*(.+?)(?=\n{2,}FINAL|\Z)", raw, re.DOTALL | re.IGNORECASE)
+    sizing_match = re.search(r"\*\*Position Sizing\*\*:\s*(.+?)(?=\n{2,}|## |\n---|\nFINAL |\Z)", raw, re.DOTALL | re.IGNORECASE)
+    # Cap sizing at reasonable length (old formats may capture too much without proper stop)
+    if sizing_match and len(sizing_match.group(1)) > 200:
+        sizing_match = None
     # Fallback: extract sizing from **总仓位上限** table
     if not sizing_match:
         sizing_match = re.search(r"\*\*(?:总仓位上限|仓位上限)\*\*.*?\|\s*([^\n|]+)", raw)
     # Fallback: extract sizing from **上限** row: | **上限** | — | **70%** | 单票仓位上限约束 |
     if not sizing_match:
         sizing_match = re.search(r"\*\*上限\*\*.*?\|\s*—\s*\|\s*\*\*?([^\*]+)\*\*?", raw)
-    final_match = re.search(r"FINAL TRANSACTION PROPOSAL:\s*\*\*?(.+?)\*\*?\s*$", raw, re.IGNORECASE | re.MULTILINE)
+    # FINAL: match FIRST occurrence (not anchored to end — old format has it in the middle)
+    final_match = re.search(r"FINAL TRANSACTION PROPOSAL:\s*([^\n]+)", raw, re.IGNORECASE)
     reasoning_match = re.search(r"\*\*Reasoning\*\*:\s*(.+?)(?=\n\*\*Entry|\nFINAL|\Z)", raw, re.DOTALL | re.IGNORECASE)
 
     # Try to extract action from table rows (format: "买入/推荐" in table)
@@ -316,9 +342,34 @@ def _parse_trader_plan(raw: str) -> dict:
     # Try stop loss in bold section: 止损位：**34.00元**
     if not stop_match:
         stop_match = re.search(r"止损(?:位|价)?[：:]\*\*([\d.]+)元", raw)
-
+    # Fallback: extract entry price from ¥N-N pattern (¥148–¥150 style table cells)
+    if not entry_match:
+        m = re.search(r"[¥￥]\s*(\d{2,3}(?:\.\d{1,2})?(?:[-–]\d{2,3}(?:\.\d{1,2})?)?)", raw)
+        if m:
+            entry_match = m
+    # Fallback: extract entry from "回落至¥148" pattern (first occurrence)
+    if not entry_match:
+        m = re.search(r"回落至[¥￥]?\s*(\d[\d.]+)", raw)
+        if m:
+            entry_match = m
+    # Fallback: extract stop loss from Key Monitoring Indicators: "跌破 ¥131.00元"
+    if not stop_match:
+        m = re.search(r"跌破.*?(\d[\d.]+)\s*元", raw)
+        if m:
+            stop_match = m
+    # Fallback: extract sizing from 总仓位上限 text: 总仓位上限：不超过30%
+    if not sizing_match:
+        sizing_match = re.search(r"总仓位(?:上限)?[:：]\s*([^\n]{1,50}?)(?:\n|，|$)", raw)
     action = action_match.group(1).strip().replace("**", "") if action_match else ""
     final_proposal = final_match.group(1).strip() if final_match else action
+    # If action still empty but final_proposal has action keywords, extract from it
+    # Use last occurrence to prefer stronger signals (e.g., "观望→轻仓买入" → "买入" not "观望")
+    if not action and final_proposal:
+        all_kw = [(kw, final_proposal.lower().rfind(kw)) for kw in ("买入", "卖出", "做多", "做空", "观望", "持有", "持仓", "HOLD", "BUY", "SELL")]
+        found = [(kw, pos) for kw, pos in all_kw if pos >= 0]
+        if found:
+            found.sort(key=lambda x: x[1])
+            action = found[-1][0]
 
     action_upper = action.upper()
     if "BUY" in action_upper or "买入" in action or "做多" in action or "开多" in action:

@@ -310,8 +310,8 @@
       </div>
       {% endif %}
 
-      {# ── Fallback raw markdown ── #}
-      {% if not trader_parsed.action and trader_investment_plan %}
+      {# ── Raw markdown analysis (always show if available — may contain richer analysis beyond extracted fields) ── #}
+      {% if trader_investment_plan %}
       <div id="cnt-trader-plan" class="report-raw prose prose-invert prose-sm max-w-none">{{ trader_investment_plan|safe }}</div>
       {% endif %}
 

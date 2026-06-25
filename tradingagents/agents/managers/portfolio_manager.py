@@ -91,7 +91,25 @@ def create_portfolio_manager(llm):
 - **Underweight**: Reduce exposure, take partial profits
 - **Sell**: Exit position or avoid entry
 
-**Required Output Format** (follow exactly for display on report page):
+**Context:**
+- Research Manager's investment plan: **{research_plan}**
+- Trader's transaction proposal: **{trader_plan}**
+{lessons_line}
+**Risk Analysts Debate History:**
+{history}
+
+---
+
+**Output Structure** (STRICT — follow this order, no exceptions):
+1. Your response must START with the format block below (lines 1-18).
+2. After the format block, you may add a '**更多**' section for nuanced analysis.
+3. Do NOT write any intro text, headers, tables, or analysis BEFORE the format block.
+4. Do NOT add any text between the format fields.
+Wrong ❌: '# 投资决策报告\\n\\n## 辩论裁决\\n...\\n**Rating**: BUY'
+Correct ✅: '**Rating**: BUY\\n**Executive Summary**: ...\\n\\n**更多**\\n...'
+"\n"
+"\n"
+"**Required Format** (your response MUST start with this exact block):
 ```
 **Rating**: <Buy/Overweight/Hold/Underweight/Sell>
 
@@ -117,12 +135,7 @@ def create_portfolio_manager(llm):
 - <跟踪指标/验证节点>
 ```
 
-**Context:**
-- Research Manager's investment plan: **{research_plan}**
-- Trader's transaction proposal: **{trader_plan}**
-{lessons_line}
-**Risk Analysts Debate History:**
-{history}
+**更多** (optional — only for nuanced debate points, risk caveats, timing considerations after the format block above):"
 
 ---
 

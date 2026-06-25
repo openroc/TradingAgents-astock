@@ -282,6 +282,11 @@ def _htmlify_chunk(chunk: dict) -> None:
         "judge_decision",
     }
     _htmlify_value(chunk, skip_keys)
+    # Strip XML format tags from trader_investment_plan (not in skip_keys → handled above)
+    if "trader_investment_plan" in chunk and isinstance(chunk["trader_investment_plan"], str):
+        import re
+        chunk["trader_investment_plan"] = re.sub(r"</?format>[\s\n]*", "", chunk["trader_investment_plan"], flags=re.IGNORECASE)
+        chunk["trader_investment_plan"] = re.sub(r"</?detail>[\s\n]*", "", chunk["trader_investment_plan"], flags=re.IGNORECASE)
 
 
 def _htmlify_value(val: Any, skip_keys: set) -> None:
