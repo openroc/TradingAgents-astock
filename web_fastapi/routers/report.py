@@ -300,6 +300,18 @@ def _parse_trader_plan(raw: str) -> dict:
     # Try from **固定止损** table row: | **固定止损** | 125元 |
     if not stop_match:
         stop_match = re.search(r"固定止损.*?\|\s*([^元\n]+)元", raw)
+    # Try bold-value table cells: | **建仓区间** | **35.00～36.00元** |
+    if not entry_match:
+        entry_match = re.search(r"\*\*(?:建仓区间|入场区间)\*\*.*?\|\s*\*\*([^\n]+?)\*\*", raw)
+    # Try bold stop loss in table: | **硬止损（必须执行）** | **34.00元** | or | **止损** | **34.00元** |
+    if not stop_match:
+        stop_match = re.search(r"\*\*(?:硬止损|止损(?:位)?)\*\*.*?\|\s*\*\*([\d.]+)元", raw)
+    # Try section heading with bold value: 入场区间：**35.00～36.00元**
+    if not entry_match:
+        entry_match = re.search(r"(?:入场|建仓)(?:区间)?[：:]\*\*([\d.]+)", raw)
+    # Try stop loss in bold section: 止损位：**34.00元**
+    if not stop_match:
+        stop_match = re.search(r"止损(?:位|价)?[：:]\*\*([\d.]+)元", raw)
 
     action = action_match.group(1).strip().replace("**", "") if action_match else ""
     final_proposal = final_match.group(1).strip() if final_match else action

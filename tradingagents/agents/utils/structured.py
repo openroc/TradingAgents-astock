@@ -70,4 +70,12 @@ def invoke_structured_or_freetext(
             )
 
     response = plain_llm.invoke(prompt)
-    return response.content
+    raw = response.content
+    # Strip LlamaIndex/LangChain think blocks from free-text fallback.
+    # The model's own thinking tags (<think>...</think>) are not valid markdown
+    # and must not appear in stored output.
+    import re
+    cleaned = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
+    if cleaned != raw:
+        logger.warning("%s: freed-text output contained <think> blocks (stripped)", agent_name)
+    return cleaned
