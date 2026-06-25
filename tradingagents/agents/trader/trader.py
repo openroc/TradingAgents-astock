@@ -49,8 +49,17 @@ def create_trader(llm):
                     "- Minimum lot: 100 shares (main board) or 200 shares (STAR/ChiNext)\n"
                     "- Trading hours: 09:30-11:30, 13:00-15:00 Beijing time\n"
                     "Anchor your reasoning in the analysts' reports and the research plan. "
-                    "Be specific about entry price, stop loss, and position sizing. "
-                    "（以上参数仅供技术研究参考，不构成投资建议）"
+                    "Be specific about entry price, stop loss, and position sizing.\n"
+                    "（以上参数仅供技术研究参考，不构成投资建议）\n\n"
+                    "**Required Output Format** (follow exactly for display on report page):\n"
+                    "```\n"
+                    "**Action**: <Buy/Hold/Sell>\n\n"
+                    "**Reasoning**: <2-4 sentence concise action plan>\n\n"
+                    "**Entry Price**: <price>元 (or <price1>-<price2>元 for range)\n"
+                    "**Stop Loss**: <price>元\n"
+                    "**Position Sizing**: <e.g. 30% of portfolio>\n\n"
+                    "FINAL TRANSACTION PROPOSAL: **<BUY/HOLD/SELL>**\n"
+                    "```"
                 ),
             },
             {

@@ -249,8 +249,12 @@ def _parse_trader_plan(raw: str) -> dict:
     raw = re.sub(r"<think>[\s\S]*?</think>", "", raw).strip()
 
     action_match = re.search(r"\*\*Action\*\*:\s*(.+?)(?:\n|$)", raw, re.IGNORECASE)
-    entry_match = re.search(r"\*\*Entry Price\*\*:\s*([\d.]+)", raw, re.IGNORECASE)
-    stop_match = re.search(r"\*\*Stop Loss\*\*:\s*([\d.]+)", raw, re.IGNORECASE)
+    # Entry Price: supports both "35.00元" and "35.00-36.00元" range
+    entry_match = re.search(r"\*\*Entry Price\*\*:\s*([\d.～-]+元)", raw, re.IGNORECASE)
+    if not entry_match:
+        entry_match = re.search(r"\*\*Entry Price\*\*:\s*([\d.]+)", raw, re.IGNORECASE)
+    # Stop Loss: always has "元" suffix
+    stop_match = re.search(r"\*\*Stop Loss\*\*:\s*([\d.]+)元", raw, re.IGNORECASE)
     sizing_match = re.search(r"\*\*Position Sizing\*\*:\s*(.+?)(?=\n{2,}FINAL|\Z)", raw, re.DOTALL | re.IGNORECASE)
     # Fallback: extract sizing from **总仓位上限** table
     if not sizing_match:
