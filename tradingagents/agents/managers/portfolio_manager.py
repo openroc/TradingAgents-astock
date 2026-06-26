@@ -168,6 +168,27 @@ Be decisive and ground every conclusion in specific evidence from the analysts.{
                 # This preserves the checkpoint so resume can recover.
                 raise RuntimeError(f"Portfolio Manager failed: {exc} | freetext: {exc2}") from exc2
 
+        # Handle None from structured call: LLM didn't call the tool but no exception
+        # was raised (can happen with MiniMax via oneapi when tool_choice fails silently)
+        if decision is None:
+            logger.warning(
+                "Portfolio Manager: structured call returned None; "
+                "falling back to free text"
+            )
+            ticker = state.get("company_of_interest", "unknown")
+            trade_date = state.get("trade_date", "unknown")
+            try:
+                response = llm.invoke(prompt)
+                decision = getattr(response, "content", str(response))
+            except Exception as exc2:
+                logger.error(
+                    "Portfolio Manager: free-text fallback also failed (%s). "
+                    "Propagating error so task is marked as failed (not completed).",
+                    exc2,
+                )
+                _save_failed_pm_prompt(ticker, trade_date, state.get("task_id", ""), prompt, f"None from structured | freetext exc: {exc2}")
+                raise RuntimeError(f"Portfolio Manager failed: None from structured | freetext: {exc2}") from exc2
+
         # Render the PM's final decision to markdown (used in PM tab and memory log)
         if isinstance(decision, PortfolioDecision):
             final_trade_decision = render_pm_decision(decision)
